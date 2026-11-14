@@ -604,13 +604,18 @@ Syntax: `<selector>:<strategy>` where strategy is `drop`, `abort`, `replace`, or
 ];
 
 /// Look up an attribute definition by name, supporting both `hx-*` and `data-hx-*`.
-pub fn get_attribute(name: &str) -> Option<&'static HtmxAttributeDefinition> {
+pub fn attribute(name: &str) -> Option<&'static HtmxAttributeDefinition> {
     let normalized = HtmxAttributeDefinition::normalize_name(name);
     // Also support hx-on:* prefix pattern
     if normalized.starts_with("hx-on:") {
         return ATTRIBUTES.iter().find(|attr| attr.name == "hx-on");
     }
     ATTRIBUTES.iter().find(|attr| attr.name == normalized)
+}
+
+/// Alias for [`attribute`] adhering to legacy `get_` convention.
+pub fn get_attribute(name: &str) -> Option<&'static HtmxAttributeDefinition> {
+    attribute(name)
 }
 
 /// Retrieve all defined attributes.

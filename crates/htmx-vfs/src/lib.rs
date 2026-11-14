@@ -1,3 +1,4 @@
+#![forbid(unsafe_code)]
 //! Virtual File System and rope-based document management for HTMX Analyzer.
 
 pub mod document;

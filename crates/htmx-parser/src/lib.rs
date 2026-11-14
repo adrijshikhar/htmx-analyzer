@@ -1,3 +1,4 @@
+#![forbid(unsafe_code)]
 //! Resilient Tree-Sitter HTML parsing and linear-time micro-syntax parsers for HTMX.
 
 pub mod cursor_context;

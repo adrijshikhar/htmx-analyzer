@@ -57,7 +57,10 @@ impl HtmlDocument {
                 let mut cursor = node.walk();
                 for child in node.children(&mut cursor) {
                     if child.kind() == "attribute_name" {
-                        let name_text = &source[child.byte_range()];
+                        let name_text = match source.get(child.byte_range()) {
+                            Some(t) => t,
+                            None => continue,
+                        };
                         if name_text == "id" {
                             is_id_attr = true;
                         }
@@ -65,7 +68,10 @@ impl HtmlDocument {
                         && (child.kind() == "quoted_attribute_value"
                             || child.kind() == "attribute_value")
                     {
-                        let raw_val = &source[child.byte_range()];
+                        let raw_val = match source.get(child.byte_range()) {
+                            Some(t) => t,
+                            None => continue,
+                        };
                         let clean_val = raw_val.trim_matches(|c| c == '"' || c == '\'');
                         if !clean_val.is_empty() {
                             ids.insert(clean_val.to_string());

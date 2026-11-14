@@ -62,16 +62,38 @@ impl Server {
         info!("htmx-analyzer initialized successfully. Listening on stdio.");
 
         let receiver = self.connection.receiver.clone();
+        let mut is_shutdown = false;
+
         while let Ok(msg) = receiver.recv() {
             match msg {
                 Message::Request(req) => {
                     if self.connection.handle_shutdown(&req)? {
-                        info!("Received shutdown request, exiting loop.");
-                        return Ok(());
+                        info!("Received shutdown request; transitioning to shutdown state.");
+                        is_shutdown = true;
+                        continue;
+                    }
+                    if is_shutdown {
+                        self.send_response(Response::new_err(
+                            req.id,
+                            lsp_server::ErrorCode::InvalidRequest as i32,
+                            "Server is shutting down".to_string(),
+                        ));
+                        continue;
                     }
                     self.handle_request(req);
                 }
                 Message::Notification(not) => {
+                    if not.method == "exit" {
+                        info!("Received exit notification; exiting process.");
+                        if is_shutdown {
+                            return Ok(());
+                        } else {
+                            std::process::exit(1);
+                        }
+                    }
+                    if is_shutdown {
+                        continue;
+                    }
                     self.handle_notification(not);
                 }
                 Message::Response(_resp) => {

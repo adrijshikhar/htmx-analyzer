@@ -1,3 +1,4 @@
+#![forbid(unsafe_code)]
 //! Pure decoupled language intelligence service for HTMX 2.0.
 
 pub mod code_action;

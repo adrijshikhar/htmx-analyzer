@@ -56,8 +56,14 @@ pub static EXTENSIONS: &[ExtensionDefinition] = &[
     },
 ];
 
-pub fn get_extension(name: &str) -> Option<&'static ExtensionDefinition> {
+/// Look up an extension definition by name.
+pub fn extension(name: &str) -> Option<&'static ExtensionDefinition> {
     EXTENSIONS.iter().find(|ext| ext.name == name)
+}
+
+/// Alias for [`extension`] adhering to legacy `get_` convention.
+pub fn get_extension(name: &str) -> Option<&'static ExtensionDefinition> {
+    extension(name)
 }
 
 pub fn all_extensions() -> &'static [ExtensionDefinition] {

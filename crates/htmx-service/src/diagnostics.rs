@@ -51,13 +51,16 @@ impl DiagnosticEngine {
         for child in node.children(&mut cursor) {
             if child.kind() == "attribute_name" {
                 let range = (child.start_byte(), child.end_byte());
-                attr_name = Some((&source[range.0..range.1], range));
+                if let Some(text) = source.get(range.0..range.1) {
+                    attr_name = Some((text, range));
+                }
             } else if child.kind() == "quoted_attribute_value" || child.kind() == "attribute_value"
             {
                 let range = (child.start_byte(), child.end_byte());
-                let raw = &source[range.0..range.1];
-                let clean = raw.trim_matches(|c| c == '"' || c == '\'');
-                attr_val = Some((clean, range));
+                if let Some(raw) = source.get(range.0..range.1) {
+                    let clean = raw.trim_matches(|c| c == '"' || c == '\'');
+                    attr_val = Some((clean, range));
+                }
             }
         }
 

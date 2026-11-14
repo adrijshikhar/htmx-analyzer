@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use clap::Parser;
 use lsp_server::Connection;
 use std::fs::OpenOptions;

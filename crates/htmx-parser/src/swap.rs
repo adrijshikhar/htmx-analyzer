@@ -92,11 +92,9 @@ impl HxSwapParser {
     }
 
     fn parse_scroll_or_show(value: &str, is_scroll: bool) -> SwapModifier {
-        let parts: Vec<&str> = value.split(':').collect();
-        let (target, dir_str) = if parts.len() == 1 {
-            (None, parts[0])
-        } else {
-            (Some(parts[0].to_string()), parts[1])
+        let (target, dir_str) = match value.split_once(':') {
+            Some((target, dir)) => (Some(target.to_string()), dir),
+            None => (None, value),
         };
 
         let direction = match dir_str {
