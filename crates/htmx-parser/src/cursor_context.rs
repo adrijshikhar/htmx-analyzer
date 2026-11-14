@@ -13,9 +13,9 @@ pub enum CursorPositionKind {
         cursor_offset_in_value: usize,
         value_range: (usize, usize),
     },
-    /// Cursor is inside a tag, ready for a new attribute (e.g. `<button |>`).
+    /// Cursor is inside a tag body after tag name whitespace, ready for a new attribute (e.g. `<button |>`).
     TagBody,
-    /// Cursor is outside tags (in text or whitespace).
+    /// Cursor is outside tags (in text or whitespace) or inside the tag name itself.
     None,
 }
 
@@ -34,7 +34,7 @@ impl CursorScanner {
     pub fn scan(source: &str, offset: usize) -> CursorContext {
         let offset = offset.min(source.len());
 
-        // Find the start of the current tag by scanning backwards from offset
+        // Find the start of the current tag by scanning backwards from offset with quote tracking
         let tag_start = match Self::find_tag_start(source, offset) {
             Some(pos) => pos,
             None => {
@@ -46,7 +46,7 @@ impl CursorScanner {
             }
         };
 
-        // Slice from tag_start to find tag end or end of relevant context
+        // Slice from tag_start to find tag end with quote tracking
         let tag_content = &source[tag_start..];
         let tag_end_rel = Self::find_tag_end(tag_content);
         let tag_end = tag_start + tag_end_rel;
@@ -75,30 +75,43 @@ impl CursorScanner {
             };
         }
 
-        // Now parse attributes between tag_name_end and tag_end
         let attr_start_abs = tag_start + 1 + tag_name_len;
-        let attr_region_end = tag_end.min(source.len());
 
+        // If cursor is still inside or directly at tag name without whitespace, don't report TagBody
+        if offset < attr_start_abs
+            || (offset == attr_start_abs
+                && (attr_start_abs >= source.len()
+                    || !source.as_bytes()[attr_start_abs].is_ascii_whitespace()))
+        {
+            return CursorContext {
+                tag_name: Some(tag_name),
+                position_kind: CursorPositionKind::None,
+                existing_attributes: Vec::new(),
+            };
+        }
+
+        let attr_region_end = tag_end.min(source.len());
         Self::parse_tag_attributes(source, attr_start_abs, attr_region_end, offset, tag_name)
     }
 
     fn find_tag_start(source: &str, offset: usize) -> Option<usize> {
-        let bytes = source.as_bytes();
-        let mut i = offset;
+        let window_start = offset.saturating_sub(8192);
+        let slice = &source[window_start..offset];
 
-        // Look back for '<'
-        while i > 0 {
-            i -= 1;
-            if bytes[i] == b'>' {
-                // If there's an unquoted '>' before '<', we're outside a tag
-                return None;
-            }
-            if bytes[i] == b'<' {
-                // Check if this is a comment <!--
-                if source[i..].starts_with("<!--") {
+        for (rel_idx, ch) in slice.char_indices().rev() {
+            if ch == '<' {
+                let cand_start = window_start + rel_idx;
+                if source[cand_start..].starts_with("<!--") {
+                    continue;
+                }
+                let tag_slice = &source[cand_start..];
+                let end_rel = Self::find_tag_end(tag_slice);
+                let cand_end = cand_start + end_rel;
+                if cand_end >= offset {
+                    return Some(cand_start);
+                } else {
                     return None;
                 }
-                return Some(i);
             }
         }
         None

@@ -1,7 +1,7 @@
 use crate::handler;
 use htmx_service::HtmxLanguageService;
 use htmx_vfs::DocumentStore;
-use lsp_server::{Connection, Message, Notification, Request, RequestId, Response};
+use lsp_server::{Connection, Message, Notification, Request, Response};
 use lsp_types::{
     notification::{
         DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument, Notification as _,
@@ -11,15 +11,13 @@ use lsp_types::{
     CodeActionOptions, CodeActionProviderCapability, CompletionOptions, HoverProviderCapability,
     ServerCapabilities, TextDocumentSyncCapability, TextDocumentSyncKind,
 };
-use std::collections::HashSet;
 use std::error::Error;
-use tracing::{error, info, trace, warn};
+use tracing::{debug, error, info, trace, warn};
 
 pub struct Server {
     connection: Connection,
     service: HtmxLanguageService,
     doc_store: DocumentStore,
-    cancelled_requests: HashSet<RequestId>,
 }
 
 impl Server {
@@ -28,7 +26,6 @@ impl Server {
             connection,
             service: HtmxLanguageService::new(),
             doc_store: DocumentStore::new(),
-            cancelled_requests: HashSet::new(),
         }
     }
 
@@ -87,16 +84,6 @@ impl Server {
     }
 
     fn handle_request(&mut self, req: Request) {
-        if self.cancelled_requests.remove(&req.id) {
-            info!("Request was canceled: {:?}", req.id);
-            self.send_response(Response::new_err(
-                req.id,
-                lsp_server::ErrorCode::RequestCanceled as i32,
-                "Request canceled".to_string(),
-            ));
-            return;
-        }
-
         let id = req.id.clone();
         let method = req.method.as_str();
 
@@ -206,14 +193,7 @@ impl Server {
                 self.publish_diagnostics(publish_params);
             }
             "$/cancelRequest" => {
-                #[derive(serde::Deserialize)]
-                struct CancelParams {
-                    id: RequestId,
-                }
-                if let Ok(p) = serde_json::from_value::<CancelParams>(not.params) {
-                    info!("Received cancel request for id: {:?}", p.id);
-                    self.cancelled_requests.insert(p.id);
-                }
+                debug!("Received cancel request notification");
             }
             _ => {
                 trace!("Ignoring unhandled notification: {}", method);

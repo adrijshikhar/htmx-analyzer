@@ -53,7 +53,11 @@ impl HxSwapParser {
         let mut modifiers = Vec::new();
 
         for (idx, token) in tokens.iter().enumerate() {
-            if idx == 0 && (SWAP_STYLES.contains(token) || !token.contains(':')) {
+            if idx == 0
+                && (SWAP_STYLES.contains(token)
+                    || !token.contains(':')
+                    || token.starts_with("morph:"))
+            {
                 style = Some(token.to_string());
                 continue;
             }

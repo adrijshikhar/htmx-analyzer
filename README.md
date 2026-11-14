@@ -29,9 +29,16 @@ htmx-analyzer/
 ## Editor Setup
 
 ### Zed
-Install the `htmx-lsp` extension from the Zed extension store, or configure your `settings.json`:
+You can configure `htmx-analyzer` as an external language server in your Zed `settings.json`:
 ```json
 {
+  "lsp": {
+    "htmx-analyzer": {
+      "binary": {
+        "path": "htmx-analyzer"
+      }
+    }
+  },
   "languages": {
     "HTML": {
       "language_servers": ["htmx-analyzer", "..."]

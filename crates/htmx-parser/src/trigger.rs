@@ -114,10 +114,23 @@ impl HxTriggerParser {
         let first_token = &tokens[token_idx];
         token_idx += 1;
 
-        // Check for polling syntax: "every 2s"
+        // Check for polling syntax: "every 2s" or "every 2s [condition]"
         if first_token == "every" && token_idx < tokens.len() {
             let duration = tokens[token_idx].clone();
             token_idx += 1;
+
+            let mut filter = None;
+            if token_idx < tokens.len() && tokens[token_idx].starts_with('[') {
+                let filter_token = &tokens[token_idx];
+                token_idx += 1;
+                filter = Some(
+                    filter_token
+                        .trim_start_matches('[')
+                        .trim_end_matches(']')
+                        .to_string(),
+                );
+            }
+
             let mut modifiers = vec![TriggerModifier::Every(duration.clone())];
 
             while token_idx < tokens.len() {
@@ -128,7 +141,7 @@ impl HxTriggerParser {
 
             return Some(TriggerSpecification {
                 event: format!("every {}", duration),
-                filter: None,
+                filter,
                 modifiers,
                 raw: input.to_string(),
             });

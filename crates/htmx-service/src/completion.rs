@@ -43,10 +43,11 @@ impl CompletionProvider {
                 attr.name.to_string()
             };
 
-            // Avoid suggesting attributes already present on this tag
-            if existing
-                .iter()
-                .any(|e| e == &candidate_name || e == attr.name)
+            // Avoid suggesting attributes already present on this tag, unless it is the attribute currently being typed
+            if candidate_name != prefix
+                && existing
+                    .iter()
+                    .any(|e| e == &candidate_name || e == attr.name)
             {
                 continue;
             }

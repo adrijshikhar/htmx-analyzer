@@ -118,12 +118,19 @@ impl HoverProvider {
 
         let start = before
             .rfind(|c: char| c.is_whitespace() || c == ',')
-            .map(|i| i + 1)
+            .map(|i| {
+                let ch = before[i..].chars().next().unwrap();
+                i + ch.len_utf8()
+            })
             .unwrap_or(0);
         let end = after
             .find(|c: char| c.is_whitespace() || c == ',')
             .map(|i| clamped + i)
             .unwrap_or(value.len());
+
+        if !value.is_char_boundary(start) || !value.is_char_boundary(end) || start > end {
+            return None;
+        }
 
         let tok = value[start..end].trim();
         if tok.is_empty() {
