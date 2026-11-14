@@ -135,6 +135,23 @@ fn test_tag_scan_after_prose_apostrophe() {
 }
 
 #[test]
+fn test_stray_less_than_in_template_text() {
+    let html = "{% if a < b %}<div hx-target=";
+    let offset = html.len();
+    let ctx = CursorScanner::scan(html, offset);
+    assert_eq!(ctx.tag_name.as_deref(), Some("div"));
+    match ctx.position_kind {
+        CursorPositionKind::AttributeValue { attribute_name, .. } => {
+            assert_eq!(attribute_name, "hx-target");
+        }
+        _ => panic!(
+            "Expected AttributeValue for div following '<' in template, got {:?}",
+            ctx.position_kind
+        ),
+    }
+}
+
+#[test]
 fn test_cursor_scanner_attribute_name() {
     let html = r#"<button hx-sw>"#;
     // Cursor at "hx-sw|" (offset 13)
@@ -187,6 +204,29 @@ fn test_cursor_scanner_unclosed_tag_typing() {
             assert_eq!(prefix, "hx-");
         }
         _ => panic!("Expected AttributeName for unclosed tag typing"),
+    }
+}
+
+#[test]
+fn test_cursor_scanner_unquoted_attribute_value_end() {
+    let html = "<button hx-swap=inner >";
+    // Index of 'r' in 'inner' is 20. End of 'inner' is offset 21.
+    let ctx = CursorScanner::scan(html, 21);
+    match ctx.position_kind {
+        CursorPositionKind::AttributeValue {
+            attribute_name,
+            value,
+            cursor_offset_in_value,
+            ..
+        } => {
+            assert_eq!(attribute_name, "hx-swap");
+            assert_eq!(value, "inner");
+            assert_eq!(cursor_offset_in_value, 5);
+        }
+        _ => panic!(
+            "Expected AttributeValue at end of unquoted value, got {:?}",
+            ctx.position_kind
+        ),
     }
 }
 

@@ -125,13 +125,29 @@ impl CursorScanner {
                     in_quote = Some(ch);
                 } else if ch == '>' {
                     in_tag = false;
+                } else if ch == '<' {
+                    let cand_start = window_start + rel_idx;
+                    let rest = &source[cand_start..];
+                    if let Some(next_ch) = rest.chars().nth(1) {
+                        if (next_ch.is_ascii_alphabetic() || next_ch == '/' || next_ch == '!')
+                            && !rest.starts_with("<!--")
+                        {
+                            tag_starts.push(cand_start);
+                            in_quote = None;
+                        }
+                    }
                 }
             } else if ch == '<' {
                 let cand_start = window_start + rel_idx;
-                if !source[cand_start..].starts_with("<!--") {
-                    tag_starts.push(cand_start);
-                    in_tag = true;
-                    in_quote = None;
+                let rest = &source[cand_start..];
+                if let Some(next_ch) = rest.chars().nth(1) {
+                    if (next_ch.is_ascii_alphabetic() || next_ch == '/' || next_ch == '!')
+                        && !rest.starts_with("<!--")
+                    {
+                        tag_starts.push(cand_start);
+                        in_tag = true;
+                        in_quote = None;
+                    }
                 }
             }
         }
@@ -182,6 +198,7 @@ impl CursorScanner {
 
         let mut existing_attributes = Vec::new();
         let mut current_position = CursorPositionKind::TagBody;
+        let mut last_token_end = None;
 
         let bytes = slice.as_bytes();
         let mut i = 0;
@@ -190,7 +207,7 @@ impl CursorScanner {
             // Skip whitespace
             while i < bytes.len() && bytes[i].is_ascii_whitespace() {
                 let abs_pos = start + i;
-                if abs_pos == offset {
+                if abs_pos == offset && last_token_end != Some(offset) {
                     current_position = CursorPositionKind::TagBody;
                 }
                 i += 1;
@@ -217,6 +234,7 @@ impl CursorScanner {
 
             let abs_name_start = start + attr_name_start;
             let abs_name_end = start + attr_name_end;
+            last_token_end = Some(abs_name_end);
 
             // Check if cursor is on this attribute name
             if offset >= abs_name_start && offset <= abs_name_end {
@@ -276,6 +294,7 @@ impl CursorScanner {
                     let val = &slice[val_start..val_end];
                     let abs_val_start = start + val_start;
                     let abs_val_end = start + val_end;
+                    last_token_end = Some(abs_val_end);
 
                     if offset >= abs_val_start && offset <= abs_val_end {
                         let cursor_offset_in_val = offset - abs_val_start;

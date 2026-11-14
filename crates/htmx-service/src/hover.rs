@@ -22,11 +22,14 @@ impl HoverProvider {
 
     fn hover_attribute_name(attr_name: &str) -> Option<Hover> {
         let attr = get_attribute(attr_name)?;
+        let normalized = HtmxAttributeDefinition::normalize_name(attr_name);
 
         let mut markdown = format!("### `{}`\n\n**{}**\n\n", attr.name, attr.summary);
 
-        if let Some(dep) = attr.deprecated {
-            markdown.push_str(&format!("> ⚠️ **Deprecated in HTMX 2.0**\n> {}\n\n", dep));
+        if normalized == attr.name {
+            if let Some(dep) = attr.deprecated {
+                markdown.push_str(&format!("> ⚠️ **Deprecated in HTMX 2.0**\n> {}\n\n", dep));
+            }
         }
 
         markdown.push_str(attr.description);
@@ -52,7 +55,11 @@ impl HoverProvider {
 
         let markdown = match norm_name {
             "hx-swap" => {
-                if let Some(mod_def) = SWAP_MODIFIERS.iter().find(|m| token.starts_with(m.name)) {
+                if let Some(mod_def) = SWAP_MODIFIERS.iter().find(|m| {
+                    token == m.name
+                        || (token.starts_with(m.name)
+                            && token.as_bytes().get(m.name.len()) == Some(&b':'))
+                }) {
                     format!(
                         "### Swap Modifier: `{}`\n\n{}",
                         mod_def.name, mod_def.description
@@ -64,8 +71,11 @@ impl HoverProvider {
                 }
             }
             "hx-trigger" => {
-                if let Some(mod_def) = TRIGGER_MODIFIERS.iter().find(|m| token.starts_with(m.name))
-                {
+                if let Some(mod_def) = TRIGGER_MODIFIERS.iter().find(|m| {
+                    token == m.name
+                        || (token.starts_with(m.name)
+                            && token.as_bytes().get(m.name.len()) == Some(&b':'))
+                }) {
                     format!(
                         "### Trigger Modifier: `{}`\n\n{}",
                         mod_def.name, mod_def.description

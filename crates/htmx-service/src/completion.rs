@@ -36,6 +36,32 @@ impl CompletionProvider {
         let is_data_prefix = prefix.starts_with("data-");
         let mut items = Vec::new();
 
+        let event_prefix = if let Some(p) = prefix.strip_prefix("hx-on:") {
+            Some((p, "hx-on:"))
+        } else {
+            prefix
+                .strip_prefix("data-hx-on:")
+                .map(|p| (p, "data-hx-on:"))
+        };
+
+        if let Some((ev_p, base_prefix)) = event_prefix {
+            for event in TRIGGER_EVENTS {
+                if ev_p.is_empty() || event.starts_with(ev_p) {
+                    let full_name = format!("{}{}", base_prefix, event);
+                    items.push(CompletionItem {
+                        label: full_name.clone(),
+                        kind: Some(CompletionItemKind::EVENT),
+                        detail: Some(format!("Inline handler for `{}` event", event)),
+                        insert_text: Some(format!("{}=\"$1\"", full_name)),
+                        insert_text_format: Some(InsertTextFormat::SNIPPET),
+                        deprecated: Some(false),
+                        ..Default::default()
+                    });
+                }
+            }
+            return items;
+        }
+
         for attr in all_attributes() {
             let candidate_name = if is_data_prefix {
                 format!("data-{}", attr.name)
@@ -66,6 +92,8 @@ impl CompletionProvider {
                 attr.summary, attr.documentation_url
             );
 
+            let is_deprecated = attr.deprecated.is_some() && attr.name != "hx-on";
+
             items.push(CompletionItem {
                 label: candidate_name,
                 kind: Some(CompletionItemKind::PROPERTY),
@@ -76,7 +104,7 @@ impl CompletionProvider {
                 })),
                 insert_text: Some(insert_text),
                 insert_text_format: Some(InsertTextFormat::SNIPPET),
-                deprecated: Some(attr.deprecated.is_some()),
+                deprecated: Some(is_deprecated),
                 ..Default::default()
             });
         }

@@ -76,23 +76,51 @@ impl CodeActionProvider {
 
         let new_text = if norm_name == "hx-ws" {
             if let Some(val) = attr_val {
-                if let Some(url) = val.strip_prefix("connect:") {
-                    format!("hx-ext=\"ws\" ws-connect=\"{}\"", url)
-                } else if val == "send" {
-                    "ws-send".to_string()
+                let mut parts = Vec::new();
+                let mut has_connect = false;
+                for part in val.split_whitespace() {
+                    if let Some(url) = part.strip_prefix("connect:") {
+                        has_connect = true;
+                        parts.push(format!("ws-connect=\"{}\"", url));
+                    } else if part == "send" {
+                        parts.push("ws-send".to_string());
+                    } else {
+                        // Unrecognized part: cannot safely migrate
+                        return None;
+                    }
+                }
+                if parts.is_empty() {
+                    return None;
+                }
+                if has_connect {
+                    format!("hx-ext=\"ws\" {}", parts.join(" "))
                 } else {
-                    format!("hx-ext=\"ws\" ws-connect=\"{}\"", val)
+                    parts.join(" ")
                 }
             } else {
                 "hx-ext=\"ws\"".to_string()
             }
         } else if let Some(val) = attr_val {
-            if let Some(url) = val.strip_prefix("connect:") {
-                format!("hx-ext=\"sse\" sse-connect=\"{}\"", url)
-            } else if let Some(evt) = val.strip_prefix("swap:") {
-                format!("sse-swap=\"{}\"", evt)
+            let mut parts = Vec::new();
+            let mut has_connect = false;
+            for part in val.split_whitespace() {
+                if let Some(url) = part.strip_prefix("connect:") {
+                    has_connect = true;
+                    parts.push(format!("sse-connect=\"{}\"", url));
+                } else if let Some(evt) = part.strip_prefix("swap:") {
+                    parts.push(format!("sse-swap=\"{}\"", evt));
+                } else {
+                    // Unrecognized part: cannot safely migrate
+                    return None;
+                }
+            }
+            if parts.is_empty() {
+                return None;
+            }
+            if has_connect {
+                format!("hx-ext=\"sse\" {}", parts.join(" "))
             } else {
-                format!("hx-ext=\"sse\" sse-connect=\"{}\"", val)
+                parts.join(" ")
             }
         } else {
             "hx-ext=\"sse\"".to_string()

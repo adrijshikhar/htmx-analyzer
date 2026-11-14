@@ -229,3 +229,132 @@ fn test_sse_quick_fix() {
         assert_eq!(edits[0].new_text, "hx-ext=\"sse\" sse-connect=\"/events\"");
     }
 }
+
+#[test]
+fn test_hx_on_event_not_deprecated() {
+    let service = HtmxLanguageService::new();
+    let uri = Uri::from_str("file:///test.html").unwrap();
+    let html = r#"<button hx-on:click="doSomething()">Click</button>"#;
+    let doc = Document::new(uri.clone(), 1, html);
+    let diags = service.validate(&doc);
+    assert!(
+        diags.is_empty(),
+        "hx-on:click must not trigger deprecation diagnostics"
+    );
+
+    // Bare hx-on MUST trigger HTMX001
+    let bare_html = r#"<button hx-on="click: doSomething()">Click</button>"#;
+    let bare_doc = Document::new(uri.clone(), 1, bare_html);
+    let bare_diags = service.validate(&bare_doc);
+    assert_eq!(bare_diags.len(), 1);
+    assert_eq!(
+        bare_diags[0].code.as_ref(),
+        Some(&NumberOrString::String("HTMX001".to_string()))
+    );
+
+    // Hover on hx-on:click should not show deprecated
+    let hover = service
+        .hover(
+            &doc,
+            Position {
+                line: 0,
+                character: 11,
+            },
+        )
+        .expect("Hover should exist");
+    if let lsp_types::HoverContents::Markup(m) = hover.contents {
+        assert!(
+            !m.value.contains("Deprecated"),
+            "hx-on:click hover must not contain deprecation warning"
+        );
+    }
+}
+
+#[test]
+fn test_hx_on_completion() {
+    let service = HtmxLanguageService::new();
+    let uri = Uri::from_str("file:///test.html").unwrap();
+    let html = r#"<button hx-on:c >Click</button>"#;
+    let doc = Document::new(uri, 1, html);
+    let items = service.complete(
+        &doc,
+        Position {
+            line: 0,
+            character: 15,
+        },
+    );
+    let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+    assert!(labels.contains(&"hx-on:click"));
+    assert!(labels.contains(&"hx-on:change"));
+    for item in &items {
+        assert_eq!(
+            item.deprecated,
+            Some(false),
+            "hx-on event completions must not be marked deprecated"
+        );
+    }
+}
+
+#[test]
+fn test_modifier_hover_exact_match() {
+    let service = HtmxLanguageService::new();
+    let uri = Uri::from_str("file:///test.html").unwrap();
+    // once-custom is a custom event name, should not match 'once' modifier
+    let html = r#"<button hx-trigger="once-custom">Click</button>"#;
+    let doc = Document::new(uri, 1, html);
+    let hover = service.hover(
+        &doc,
+        Position {
+            line: 0,
+            character: 22,
+        },
+    );
+    assert!(
+        hover.is_none(),
+        "once-custom should not match 'once' modifier docs"
+    );
+}
+
+#[test]
+fn test_sse_multi_part_quick_fix() {
+    let service = HtmxLanguageService::new();
+    let uri = Uri::from_str("file:///test.html").unwrap();
+    let html = r#"<div hx-sse="connect:/events swap:msg">SSE</div>"#;
+    let doc = Document::new(uri.clone(), 1, html);
+    let diags = service.validate(&doc);
+    assert_eq!(diags.len(), 1);
+
+    let actions = service.code_actions(&doc, diags[0].range, &diags);
+    assert_eq!(actions.len(), 1);
+    if let lsp_types::CodeActionOrCommand::CodeAction(ca) = &actions[0] {
+        let edits = ca
+            .edit
+            .as_ref()
+            .unwrap()
+            .changes
+            .as_ref()
+            .unwrap()
+            .get(&uri)
+            .unwrap();
+        assert_eq!(
+            edits[0].new_text,
+            "hx-ext=\"sse\" sse-connect=\"/events\" sse-swap=\"msg\""
+        );
+    }
+}
+
+#[test]
+fn test_unknown_hx_ws_value_returns_no_quick_fix() {
+    let service = HtmxLanguageService::new();
+    let uri = Uri::from_str("file:///test.html").unwrap();
+    let html = r#"<button hx-ws="unknown_format">WS</button>"#;
+    let doc = Document::new(uri, 1, html);
+    let diags = service.validate(&doc);
+    assert_eq!(diags.len(), 1);
+
+    let actions = service.code_actions(&doc, diags[0].range, &diags);
+    assert!(
+        actions.is_empty(),
+        "Unrecognized hx-ws value should not produce quick fix"
+    );
+}

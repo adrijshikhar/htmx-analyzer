@@ -2,7 +2,7 @@ use htmx_parser::{
     HtmlDocument, HxSwapParser, HxTarget, HxTargetParser, HxTriggerParser, SwapModifier,
     TriggerModifier, MAX_DEPTH,
 };
-use htmx_schema::get_attribute;
+use htmx_schema::{get_attribute, HtmxAttributeDefinition};
 use htmx_vfs::Document;
 use lsp_types::{Diagnostic, DiagnosticSeverity, NumberOrString, Range};
 
@@ -68,22 +68,25 @@ impl DiagnosticEngine {
 
         // HTMX001: Deprecated attributes check
         if let Some(attr_def) = get_attribute(name) {
-            if let Some(dep_msg) = attr_def.deprecated {
-                if let (Some(start_pos), Some(end_pos)) = (
-                    doc.offset_to_position(name_range.0),
-                    doc.offset_to_position(name_range.1),
-                ) {
-                    diagnostics.push(Diagnostic {
-                        range: Range {
-                            start: start_pos,
-                            end: end_pos,
-                        },
-                        severity: Some(DiagnosticSeverity::WARNING),
-                        code: Some(NumberOrString::String("HTMX001".to_string())),
-                        source: Some("htmx-analyzer".to_string()),
-                        message: dep_msg.to_string(),
-                        ..Default::default()
-                    });
+            let normalized = HtmxAttributeDefinition::normalize_name(name);
+            if normalized == attr_def.name {
+                if let Some(dep_msg) = attr_def.deprecated {
+                    if let (Some(start_pos), Some(end_pos)) = (
+                        doc.offset_to_position(name_range.0),
+                        doc.offset_to_position(name_range.1),
+                    ) {
+                        diagnostics.push(Diagnostic {
+                            range: Range {
+                                start: start_pos,
+                                end: end_pos,
+                            },
+                            severity: Some(DiagnosticSeverity::WARNING),
+                            code: Some(NumberOrString::String("HTMX001".to_string())),
+                            source: Some("htmx-analyzer".to_string()),
+                            message: dep_msg.to_string(),
+                            ..Default::default()
+                        });
+                    }
                 }
             }
         }
@@ -102,6 +105,11 @@ impl DiagnosticEngine {
         };
 
         let norm_name = htmx_schema::HtmxAttributeDefinition::normalize_name(name);
+
+        // Skip static validation if attribute value contains dynamic template expressions (Jinja, Django, EJS, etc.)
+        if val.contains("{{") || val.contains("{%") || val.contains("<%") {
+            return;
+        }
 
         match norm_name {
             // HTMX002: Invalid swap styles
