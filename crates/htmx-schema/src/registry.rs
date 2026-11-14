@@ -67,6 +67,12 @@ pub static SWAP_MODIFIERS: &[ModifierDefinition] = &[
         takes_value: true,
         allowed_values: &["true", "false"],
     },
+    ModifierDefinition {
+        name: "ignoreTitle",
+        description: "Disables automatic title update when response contains a <title> tag.",
+        takes_value: true,
+        allowed_values: &["true", "false"],
+    },
 ];
 
 pub static TRIGGER_MODIFIERS: &[ModifierDefinition] = &[
@@ -117,6 +123,19 @@ pub static TRIGGER_MODIFIERS: &[ModifierDefinition] = &[
         description: "Determines how events are queued when a request is already in flight.",
         takes_value: true,
         allowed_values: &["first", "last", "all", "none"],
+    },
+    ModifierDefinition {
+        name: "root",
+        description:
+            "CSS selector of the root element for intersection observer (`root:<selector>`).",
+        takes_value: true,
+        allowed_values: &[],
+    },
+    ModifierDefinition {
+        name: "threshold",
+        description: "Intersection ratio threshold between 0.0 and 1.0 (`threshold:<number>`).",
+        takes_value: true,
+        allowed_values: &["0.0", "0.25", "0.5", "0.75", "1.0"],
     },
 ];
 
@@ -498,10 +517,10 @@ Syntax: `<selector>:<strategy>` where strategy is `drop`, `abort`, `replace`, or
         category: AttributeCategory::Additional,
         value_type: AttributeValueType::Text,
         summary: "Handles DOM events inline with JavaScript",
-        description: "The `hx-on` (or `hx-on:<event>`) attribute allows attaching inline event handlers directly on elements.",
+        description: "The `hx-on:<event>` attribute allows attaching inline event handlers directly on elements.",
         allowed_values: &[],
         modifiers: &[],
-        deprecated: None,
+        deprecated: Some("Bare hx-on is deprecated in HTMX 2.0; use hx-on:<event> (e.g. hx-on:click) instead."),
         documentation_url: "https://htmx.org/attributes/hx-on/",
     },
     HtmxAttributeDefinition {

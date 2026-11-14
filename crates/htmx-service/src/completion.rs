@@ -56,7 +56,11 @@ impl CompletionProvider {
                 continue;
             }
 
-            let insert_text = format!("{}=\"$1\"", candidate_name);
+            let insert_text = if attr.name == "hx-on" {
+                format!("{}:$1=\"$2\"", candidate_name)
+            } else {
+                format!("{}=\"$1\"", candidate_name)
+            };
             let doc = format!(
                 "{}\n\n[HTMX Documentation]({})",
                 attr.summary, attr.documentation_url

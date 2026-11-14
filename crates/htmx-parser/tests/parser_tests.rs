@@ -33,6 +33,9 @@ fn test_trigger_parser() {
     assert!(HxTriggerParser::is_valid_duration("500"));
     assert!(!HxTriggerParser::is_valid_duration("invalid"));
     assert!(!HxTriggerParser::is_valid_duration(""));
+    assert!(!HxTriggerParser::is_valid_duration("infs"));
+    assert!(!HxTriggerParser::is_valid_duration("nans"));
+    assert!(!HxTriggerParser::is_valid_duration("-5s"));
 
     // Polling trigger
     let polling = HxTriggerParser::parse("every 2s");
@@ -107,6 +110,28 @@ fn test_target_parser() {
         HxTargetParser::parse(".active-tab"),
         Some(HxTarget::Class("active-tab".to_string()))
     );
+}
+
+#[test]
+fn test_cursor_after_closed_tag() {
+    let html = "<div></div>";
+    // Cursor right after </div> at offset 11
+    let ctx = CursorScanner::scan(html, 11);
+    assert_eq!(ctx.position_kind, CursorPositionKind::None);
+}
+
+#[test]
+fn test_tag_scan_after_prose_apostrophe() {
+    let html = "<p>Don't worry</p><button hx-";
+    // Cursor at hx-
+    let ctx = CursorScanner::scan(html, html.len());
+    assert_eq!(ctx.tag_name.as_deref(), Some("button"));
+    match ctx.position_kind {
+        CursorPositionKind::AttributeName { prefix, .. } => {
+            assert_eq!(prefix, "hx-");
+        }
+        _ => panic!("Expected AttributeName after prose with apostrophe"),
+    }
 }
 
 #[test]

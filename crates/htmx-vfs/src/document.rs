@@ -25,11 +25,14 @@ impl Document {
 
     /// Convert an LSP Position (0-indexed line and UTF-16 character offset) to a UTF-8 byte offset.
     pub fn position_to_offset(&self, position: Position) -> Option<usize> {
-        if self.rope.len_lines() == 0 {
+        let total_lines = self.rope.len_lines();
+        if total_lines == 0 {
             return Some(0);
         }
-        let max_line = self.rope.len_lines().saturating_sub(1);
-        let line_idx = (position.line as usize).min(max_line);
+        let line_idx = position.line as usize;
+        if line_idx >= total_lines {
+            return Some(self.rope.len_bytes());
+        }
 
         let line = self.rope.line(line_idx);
         let mut line_len_cu = line.len_utf16_cu();

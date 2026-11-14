@@ -27,11 +27,9 @@ impl DiagnosticEngine {
                     Self::validate_attribute_node(node, &text, doc, &parsed, &mut diagnostics);
                 }
 
-                let child_count = node.child_count();
-                for i in (0..child_count).rev() {
-                    if let Some(child) = node.child(i) {
-                        stack.push((child, depth + 1));
-                    }
+                let mut cursor = node.walk();
+                for child in node.children(&mut cursor) {
+                    stack.push((child, depth + 1));
                 }
             }
         }
@@ -49,19 +47,17 @@ impl DiagnosticEngine {
         let mut attr_name: Option<(&str, (usize, usize))> = None;
         let mut attr_val: Option<(&str, (usize, usize))> = None;
 
-        for i in 0..node.child_count() {
-            if let Some(child) = node.child(i) {
-                if child.kind() == "attribute_name" {
-                    let range = (child.start_byte(), child.end_byte());
-                    attr_name = Some((&source[range.0..range.1], range));
-                } else if child.kind() == "quoted_attribute_value"
-                    || child.kind() == "attribute_value"
-                {
-                    let range = (child.start_byte(), child.end_byte());
-                    let raw = &source[range.0..range.1];
-                    let clean = raw.trim_matches(|c| c == '"' || c == '\'');
-                    attr_val = Some((clean, range));
-                }
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            if child.kind() == "attribute_name" {
+                let range = (child.start_byte(), child.end_byte());
+                attr_name = Some((&source[range.0..range.1], range));
+            } else if child.kind() == "quoted_attribute_value" || child.kind() == "attribute_value"
+            {
+                let range = (child.start_byte(), child.end_byte());
+                let raw = &source[range.0..range.1];
+                let clean = raw.trim_matches(|c| c == '"' || c == '\'');
+                attr_val = Some((clean, range));
             }
         }
 

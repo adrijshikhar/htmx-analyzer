@@ -54,34 +54,31 @@ impl HtmlDocument {
             // Check if node is an attribute
             if node.kind() == "attribute" {
                 let mut is_id_attr = false;
-                for i in 0..node.child_count() {
-                    if let Some(child) = node.child(i) {
-                        if child.kind() == "attribute_name" {
-                            let name_text = &source[child.byte_range()];
-                            if name_text == "id" {
-                                is_id_attr = true;
-                            }
-                        } else if is_id_attr
-                            && (child.kind() == "quoted_attribute_value"
-                                || child.kind() == "attribute_value")
-                        {
-                            let raw_val = &source[child.byte_range()];
-                            let clean_val = raw_val.trim_matches(|c| c == '"' || c == '\'');
-                            if !clean_val.is_empty() {
-                                ids.insert(clean_val.to_string());
-                            }
-                            break;
+                let mut cursor = node.walk();
+                for child in node.children(&mut cursor) {
+                    if child.kind() == "attribute_name" {
+                        let name_text = &source[child.byte_range()];
+                        if name_text == "id" {
+                            is_id_attr = true;
                         }
+                    } else if is_id_attr
+                        && (child.kind() == "quoted_attribute_value"
+                            || child.kind() == "attribute_value")
+                    {
+                        let raw_val = &source[child.byte_range()];
+                        let clean_val = raw_val.trim_matches(|c| c == '"' || c == '\'');
+                        if !clean_val.is_empty() {
+                            ids.insert(clean_val.to_string());
+                        }
+                        break;
                     }
                 }
             }
 
-            // Push children in reverse order
-            let child_count = node.child_count();
-            for i in (0..child_count).rev() {
-                if let Some(child) = node.child(i) {
-                    stack.push((child, depth + 1));
-                }
+            // Push children using linear TreeCursor
+            let mut cursor = node.walk();
+            for child in node.children(&mut cursor) {
+                stack.push((child, depth + 1));
             }
         }
     }

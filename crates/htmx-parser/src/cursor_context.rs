@@ -50,9 +50,13 @@ impl CursorScanner {
         let tag_content = &source[tag_start..];
         let tag_end_rel = Self::find_tag_end(tag_content);
         let tag_end = tag_start + tag_end_rel;
+        let is_closed_tag = tag_content
+            .get(..tag_end_rel)
+            .map(|s| s.ends_with('>'))
+            .unwrap_or(false);
 
-        // If offset is strictly after tag_end, cursor is not inside this tag
-        if offset > tag_end {
+        // If offset is past tag end, or exactly at tag_end of a closed tag (e.g. <div>|), cursor is outside
+        if (is_closed_tag && offset >= tag_end) || (!is_closed_tag && offset > tag_end) {
             return CursorContext {
                 tag_name: None,
                 position_kind: CursorPositionKind::None,
@@ -108,19 +112,26 @@ impl CursorScanner {
 
         let slice = &source[window_start..offset];
         let mut tag_starts = Vec::new();
+        let mut in_tag = false;
         let mut in_quote = None;
 
         for (rel_idx, ch) in slice.char_indices() {
-            if let Some(q) = in_quote {
-                if ch == q {
-                    in_quote = None;
+            if in_tag {
+                if let Some(q) = in_quote {
+                    if ch == q {
+                        in_quote = None;
+                    }
+                } else if ch == '"' || ch == '\'' {
+                    in_quote = Some(ch);
+                } else if ch == '>' {
+                    in_tag = false;
                 }
-            } else if ch == '"' || ch == '\'' {
-                in_quote = Some(ch);
             } else if ch == '<' {
                 let cand_start = window_start + rel_idx;
                 if !source[cand_start..].starts_with("<!--") {
                     tag_starts.push(cand_start);
+                    in_tag = true;
+                    in_quote = None;
                 }
             }
         }
@@ -129,7 +140,11 @@ impl CursorScanner {
             let tag_slice = &source[cand_start..];
             let end_rel = Self::find_tag_end(tag_slice);
             let cand_end = cand_start + end_rel;
-            if cand_end >= offset {
+            let is_closed = tag_slice
+                .get(..end_rel)
+                .map(|s| s.ends_with('>'))
+                .unwrap_or(false);
+            if (!is_closed && cand_end >= offset) || (is_closed && cand_end > offset) {
                 return Some(cand_start);
             }
         }

@@ -225,6 +225,27 @@ impl HxTriggerParser {
         selector
     }
 
+    fn is_valid_number(s: &str) -> bool {
+        if s.is_empty() {
+            return false;
+        }
+        let mut has_digit = false;
+        let mut dot_count = 0;
+        for c in s.chars() {
+            if c == '.' {
+                dot_count += 1;
+                if dot_count > 1 {
+                    return false;
+                }
+            } else if c.is_ascii_digit() {
+                has_digit = true;
+            } else {
+                return false;
+            }
+        }
+        has_digit
+    }
+
     /// Validates duration formats like "500ms", "2s", "0.5s", "1m", or bare numbers like "500".
     pub fn is_valid_duration(duration: &str) -> bool {
         let trimmed = duration.trim();
@@ -232,24 +253,14 @@ impl HxTriggerParser {
             return false;
         }
 
-        // Bare number: integer milliseconds
-        if trimmed.chars().all(|c| c.is_ascii_digit()) {
-            return trimmed.parse::<u64>().is_ok();
-        }
-
         if let Some(stripped) = trimmed.strip_suffix("ms") {
-            return !stripped.is_empty()
-                && (stripped.parse::<u64>().is_ok() || stripped.parse::<f64>().is_ok());
+            Self::is_valid_number(stripped)
+        } else if let Some(stripped) = trimmed.strip_suffix('s') {
+            Self::is_valid_number(stripped)
+        } else if let Some(stripped) = trimmed.strip_suffix('m') {
+            Self::is_valid_number(stripped)
+        } else {
+            trimmed.chars().all(|c| c.is_ascii_digit())
         }
-
-        if let Some(stripped) = trimmed.strip_suffix('s') {
-            return !stripped.is_empty() && stripped.parse::<f64>().is_ok();
-        }
-
-        if let Some(stripped) = trimmed.strip_suffix('m') {
-            return !stripped.is_empty() && stripped.parse::<f64>().is_ok();
-        }
-
-        false
     }
 }
