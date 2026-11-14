@@ -57,10 +57,19 @@ impl CodeActionProvider {
             if after_eq.starts_with('"') || after_eq.starts_with('\'') {
                 let quote = after_eq.chars().next()?;
                 let inner = &after_eq[1..];
-                if let Some(close_idx) = inner.find(quote) {
-                    attr_val = Some(&inner[..close_idx]);
-                    let prefix_len = text.len() - after_eq.len() + 1;
-                    full_end_offset = prefix_len + close_idx + 1;
+                let close_idx = inner.find(quote)?;
+                attr_val = Some(&inner[..close_idx]);
+                let prefix_len = text.len() - after_eq.len() + 1;
+                full_end_offset = prefix_len + close_idx + 1;
+            } else {
+                let val_len = after_eq
+                    .find(|c: char| c.is_whitespace() || c == '>')
+                    .unwrap_or(after_eq.len());
+                let val = &after_eq[..val_len];
+                if !val.is_empty() {
+                    attr_val = Some(val);
+                    let prefix_len = text.len() - after_eq.len();
+                    full_end_offset = prefix_len + val_len;
                 }
             }
         }

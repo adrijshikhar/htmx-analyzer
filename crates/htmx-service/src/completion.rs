@@ -93,7 +93,11 @@ impl CompletionProvider {
             value
         };
 
-        let last_token = prefix_so_far.split_whitespace().last().unwrap_or("");
+        let last_token = prefix_so_far
+            .split(|c: char| c.is_whitespace() || c == ',')
+            .next_back()
+            .unwrap_or("")
+            .trim();
 
         let mut items = Vec::new();
 
@@ -130,8 +134,11 @@ impl CompletionProvider {
                 }
             }
             "hx-trigger" => {
-                let words: Vec<&str> = value.split_whitespace().collect();
-                if words.is_empty() || (words.len() == 1 && cursor_offset <= words[0].len()) {
+                let current_chunk = prefix_so_far.split(',').next_back().unwrap_or("");
+                let words_in_chunk: Vec<&str> = current_chunk.split_whitespace().collect();
+                if words_in_chunk.is_empty()
+                    || (words_in_chunk.len() == 1 && !current_chunk.ends_with(' '))
+                {
                     for event in TRIGGER_EVENTS {
                         if last_token.is_empty() || event.starts_with(last_token) {
                             items.push(CompletionItem {
@@ -141,6 +148,16 @@ impl CompletionProvider {
                                 ..Default::default()
                             });
                         }
+                    }
+                    if last_token.is_empty() || "every".starts_with(last_token) {
+                        items.push(CompletionItem {
+                            label: "every".to_string(),
+                            kind: Some(CompletionItemKind::KEYWORD),
+                            detail: Some("HTMX Polling Trigger".to_string()),
+                            insert_text: Some("every $1s".to_string()),
+                            insert_text_format: Some(InsertTextFormat::SNIPPET),
+                            ..Default::default()
+                        });
                     }
                 }
 

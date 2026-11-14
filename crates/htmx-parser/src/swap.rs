@@ -114,6 +114,9 @@ impl HxSwapParser {
 
     /// Check if a style string is one of the valid standard HTMX swap styles or recognized extension swap styles.
     pub fn is_valid_style(style: &str) -> bool {
-        style == "morph" || style == "morphdom" || SWAP_STYLES.contains(&style)
+        style.starts_with("morph:")
+            || style == "morph"
+            || style == "morphdom"
+            || SWAP_STYLES.contains(&style)
     }
 }

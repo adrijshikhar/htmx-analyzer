@@ -95,23 +95,42 @@ impl CursorScanner {
     }
 
     fn find_tag_start(source: &str, offset: usize) -> Option<usize> {
-        let window_start = offset.saturating_sub(8192);
-        let slice = &source[window_start..offset];
+        let mut window_start = offset.saturating_sub(8192);
+        while window_start < offset && !source.is_char_boundary(window_start) {
+            window_start += 1;
+        }
 
-        for (rel_idx, ch) in slice.char_indices().rev() {
-            if ch == '<' {
+        if window_start > 0 {
+            if let Some(nl) = source[..window_start].rfind('\n') {
+                window_start = nl + 1;
+            }
+        }
+
+        let slice = &source[window_start..offset];
+        let mut tag_starts = Vec::new();
+        let mut in_quote = None;
+
+        for (rel_idx, ch) in slice.char_indices() {
+            if let Some(q) = in_quote {
+                if ch == q {
+                    in_quote = None;
+                }
+            } else if ch == '"' || ch == '\'' {
+                in_quote = Some(ch);
+            } else if ch == '<' {
                 let cand_start = window_start + rel_idx;
-                if source[cand_start..].starts_with("<!--") {
-                    continue;
+                if !source[cand_start..].starts_with("<!--") {
+                    tag_starts.push(cand_start);
                 }
-                let tag_slice = &source[cand_start..];
-                let end_rel = Self::find_tag_end(tag_slice);
-                let cand_end = cand_start + end_rel;
-                if cand_end >= offset {
-                    return Some(cand_start);
-                } else {
-                    return None;
-                }
+            }
+        }
+
+        if let Some(&cand_start) = tag_starts.last() {
+            let tag_slice = &source[cand_start..];
+            let end_rel = Self::find_tag_end(tag_slice);
+            let cand_end = cand_start + end_rel;
+            if cand_end >= offset {
+                return Some(cand_start);
             }
         }
         None

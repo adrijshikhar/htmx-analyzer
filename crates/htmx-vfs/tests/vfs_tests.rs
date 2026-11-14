@@ -47,10 +47,10 @@ fn test_position_to_offset_ascii() {
 #[test]
 fn test_out_of_range_character_clamped() {
     let uri = Uri::from_str("file:///workspace/clamp.html").unwrap();
-    let text = "short";
+    let text = "short\nsecond line";
     let doc = Document::new(uri, 1, text);
 
-    // character 999 exceeds line length, must clamp to end of line without panicking
+    // character 999 on line 0 must clamp to end of "short" (offset 5), before the '\n'
     let offset = doc.position_to_offset(Position {
         line: 0,
         character: 999,

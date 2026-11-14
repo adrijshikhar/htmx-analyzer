@@ -32,7 +32,21 @@ impl Document {
         let line_idx = (position.line as usize).min(max_line);
 
         let line = self.rope.line(line_idx);
-        let char_cu = (position.character as usize).min(line.len_utf16_cu());
+        let mut line_len_cu = line.len_utf16_cu();
+        let line_chars = line.len_chars();
+        if line_chars > 0 {
+            let last_char = line.char(line_chars - 1);
+            if last_char == '\n' {
+                line_len_cu = line_len_cu.saturating_sub(1);
+                if line_chars > 1 && line.char(line_chars - 2) == '\r' {
+                    line_len_cu = line_len_cu.saturating_sub(1);
+                }
+            } else if last_char == '\r' {
+                line_len_cu = line_len_cu.saturating_sub(1);
+            }
+        }
+
+        let char_cu = (position.character as usize).min(line_len_cu);
         let char_offset_in_line = line.utf16_cu_to_char(char_cu);
         let line_char_start = self.rope.line_to_char(line_idx);
         let total_char_offset = (line_char_start + char_offset_in_line).min(self.rope.len_chars());

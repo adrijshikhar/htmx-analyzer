@@ -45,23 +45,23 @@ impl HxTriggerParser {
         results
     }
 
-    /// Split trigger specifications on commas without breaking bracketed filters `[...]`.
+    /// Split trigger specifications on commas without breaking bracketed/parenthesised filters or selectors.
     fn split_triggers_by_comma(input: &str) -> Vec<String> {
         let mut chunks = Vec::new();
         let mut current = String::new();
-        let mut bracket_depth: usize = 0;
+        let mut group_depth: usize = 0;
 
         for ch in input.chars() {
             match ch {
-                '[' => {
-                    bracket_depth += 1;
+                '[' | '(' | '{' => {
+                    group_depth += 1;
                     current.push(ch);
                 }
-                ']' => {
-                    bracket_depth = bracket_depth.saturating_sub(1);
+                ']' | ')' | '}' => {
+                    group_depth = group_depth.saturating_sub(1);
                     current.push(ch);
                 }
-                ',' if bracket_depth == 0 => {
+                ',' if group_depth == 0 => {
                     chunks.push(std::mem::take(&mut current));
                 }
                 _ => current.push(ch),
@@ -75,20 +75,20 @@ impl HxTriggerParser {
         chunks
     }
 
-    /// Tokenize while keeping bracketed filters and compound selectors intact.
+    /// Tokenize while keeping bracketed, parenthesized, and braced filters/selectors intact.
     fn tokenize_trigger(input: &str) -> Vec<String> {
         let mut tokens = Vec::new();
         let mut current = String::new();
-        let mut bracket_depth: usize = 0;
+        let mut group_depth: usize = 0;
 
         for ch in input.chars() {
-            if ch == '[' {
-                bracket_depth += 1;
+            if ch == '[' || ch == '(' || ch == '{' {
+                group_depth += 1;
                 current.push(ch);
-            } else if ch == ']' {
-                bracket_depth = bracket_depth.saturating_sub(1);
+            } else if ch == ']' || ch == ')' || ch == '}' {
+                group_depth = group_depth.saturating_sub(1);
                 current.push(ch);
-            } else if ch.is_whitespace() && bracket_depth == 0 {
+            } else if ch.is_whitespace() && group_depth == 0 {
                 if !current.is_empty() {
                     tokens.push(std::mem::take(&mut current));
                 }
@@ -149,10 +149,11 @@ impl HxTriggerParser {
 
         let (event, filter) = if let Some(bracket_start) = first_token.find('[') {
             let event_name = &first_token[..bracket_start];
-            let filter_content = if let Some(bracket_end) = first_token.find(']') {
-                &first_token[bracket_start + 1..bracket_end]
+            let after_open = &first_token[bracket_start + 1..];
+            let filter_content = if let Some(bracket_end_rel) = after_open.find(']') {
+                &after_open[..bracket_end_rel]
             } else {
-                &first_token[bracket_start + 1..]
+                after_open
             };
             (event_name.to_string(), Some(filter_content.to_string()))
         } else if token_idx < tokens.len() && tokens[token_idx].starts_with('[') {
