@@ -14,11 +14,6 @@ edition = "2021"
 authors = ["Adrij Shikhar <adrijshikhar@gmail.com>"]
 license = "Apache-2.0"
 repository = "https://github.com/adrijshikhar/htmx-analyzer"
-homepage = "https://github.com/adrijshikhar/htmx-analyzer"
-description = "A fast, production-grade HTMX 2.0 language server and static analyzer"
-readme = "README.md"
-keywords = ["htmx", "lsp", "language-server", "html", "static-analysis"]
-categories = ["development-tools", "command-line-utilities"]
 
 [workspace.dependencies]
 htmx-schema = { path = "crates/htmx-schema", version = "0.1.0" }

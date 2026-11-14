@@ -74,7 +74,7 @@ jobs:
           sha256sum "${{ matrix.asset_name }}" > "${{ matrix.asset_name }}.sha256"
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb99ba8afd # v4.6.1
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
         with:
           name: binaries-${{ matrix.target }}
           path: dist/*

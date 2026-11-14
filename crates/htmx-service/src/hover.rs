@@ -90,14 +90,11 @@ impl HoverProvider {
                 }
             }
             "hx-ext" => {
-                if let Some(ext) = get_extension(token) {
-                    format!(
-                        "### HTMX Extension: `{}`\n\n**{}**\n\n{}\n\n[Extension Documentation]({})",
-                        ext.name, ext.summary, ext.description, ext.documentation_url
-                    )
-                } else {
-                    return None;
-                }
+                let ext = get_extension(token)?;
+                format!(
+                    "### HTMX Extension: `{}`\n\n**{}**\n\n{}\n\n[Extension Documentation]({})",
+                    ext.name, ext.summary, ext.description, ext.documentation_url
+                )
             }
             "hx-target" if TARGET_KEYWORDS.contains(&token) => {
                 format!(

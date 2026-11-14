@@ -9,4 +9,3 @@ description = "Declarative schema definitions and documentation for HTMX 2.0"
 
 [dependencies]
 serde = { workspace = true }
-serde_json = { workspace = true }

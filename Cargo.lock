@@ -198,7 +198,6 @@ name = "htmx-schema"
 version = "0.1.0"
 dependencies = [
  "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -211,7 +210,6 @@ dependencies = [
  "lsp-types",
  "serde",
  "serde_json",
- "tracing",
  "tree-sitter",
 ]
 
