@@ -1,0 +1,39 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/htmx-schema",
+    "crates/htmx-parser",
+    "crates/htmx-vfs",
+    "crates/htmx-service",
+    "crates/htmx-lsp",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Adrij Shikhar <adrijshikhar@gmail.com>"]
+license = "Apache-2.0"
+repository = "https://github.com/adrijshikhar/htmx-analyzer"
+homepage = "https://github.com/adrijshikhar/htmx-analyzer"
+description = "A fast, production-grade HTMX 2.0 language server and static analyzer"
+readme = "README.md"
+keywords = ["htmx", "lsp", "language-server", "html", "static-analysis"]
+categories = ["development-tools", "command-line-utilities"]
+
+[workspace.dependencies]
+htmx-schema = { path = "crates/htmx-schema", version = "0.1.0" }
+htmx-parser = { path = "crates/htmx-parser", version = "0.1.0" }
+htmx-vfs = { path = "crates/htmx-vfs", version = "0.1.0" }
+htmx-service = { path = "crates/htmx-service", version = "0.1.0" }
+
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+lsp-types = "0.97.0"
+lsp-server = "0.10.0"
+tree-sitter = "0.24"
+tree-sitter-html = "0.23"
+ropey = "1.6"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+clap = { version = "4.5", features = ["derive"] }
+crossbeam-channel = "0.5"

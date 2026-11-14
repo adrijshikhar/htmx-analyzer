@@ -1,0 +1,12 @@
+[package]
+name = "htmx-vfs"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Virtual File System and rope-based text document management"
+
+[dependencies]
+ropey = { workspace = true }
+lsp-types = { workspace = true }
