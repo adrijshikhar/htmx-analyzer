@@ -148,7 +148,7 @@ fn test_code_action_quick_fix() {
     let service = HtmxLanguageService::new();
     let uri = Uri::from_str("file:///test.html").unwrap();
     let html = r#"<button hx-ws="connect:/chat">WS</button>"#;
-    let doc = Document::new(uri, 1, html);
+    let doc = Document::new(uri.clone(), 1, html);
     let diags = service.validate(&doc);
 
     assert_eq!(diags.len(), 1);
@@ -176,7 +176,56 @@ fn test_code_action_quick_fix() {
     match &actions[0] {
         lsp_types::CodeActionOrCommand::CodeAction(ca) => {
             assert!(ca.title.contains("Migrate hx-ws"));
+            let edits = ca
+                .edit
+                .as_ref()
+                .unwrap()
+                .changes
+                .as_ref()
+                .unwrap()
+                .get(&uri)
+                .unwrap();
+            assert_eq!(edits[0].new_text, "hx-ext=\"ws\" ws-connect=\"/chat\"");
         }
         _ => panic!("Expected CodeAction"),
+    }
+}
+
+#[test]
+fn test_text_content_swap_style() {
+    let service = HtmxLanguageService::new();
+    let uri = Uri::from_str("file:///test.html").unwrap();
+    let html = r#"<button hx-swap="textContent">Click</button>"#;
+    let doc = Document::new(uri, 1, html);
+    let diags = service.validate(&doc);
+    assert!(
+        diags.is_empty(),
+        "textContent should be recognized as a valid swap style"
+    );
+}
+
+#[test]
+fn test_sse_quick_fix() {
+    let service = HtmxLanguageService::new();
+    let uri = Uri::from_str("file:///test.html").unwrap();
+    let html = r#"<button hx-sse="connect:/events">SSE</button>"#;
+    let doc = Document::new(uri.clone(), 1, html);
+    let diags = service.validate(&doc);
+    assert_eq!(diags.len(), 1);
+
+    let actions = service.code_actions(&doc, diags[0].range, &diags);
+    assert_eq!(actions.len(), 1);
+    if let lsp_types::CodeActionOrCommand::CodeAction(ca) = &actions[0] {
+        assert!(ca.title.contains("Migrate hx-sse"));
+        let edits = ca
+            .edit
+            .as_ref()
+            .unwrap()
+            .changes
+            .as_ref()
+            .unwrap()
+            .get(&uri)
+            .unwrap();
+        assert_eq!(edits[0].new_text, "hx-ext=\"sse\" sse-connect=\"/events\"");
     }
 }

@@ -5,6 +5,7 @@ use crate::attribute::{
 pub static SWAP_STYLES: &[&str] = &[
     "innerHTML",
     "outerHTML",
+    "textContent",
     "beforebegin",
     "afterbegin",
     "beforeend",

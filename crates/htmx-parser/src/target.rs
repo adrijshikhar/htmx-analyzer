@@ -49,11 +49,25 @@ impl HxTargetParser {
         }
 
         if let Some(id) = trimmed.strip_prefix('#') {
-            return Some(HxTarget::Id(id.trim().to_string()));
+            let id = id.trim();
+            if !id.is_empty()
+                && id
+                    .chars()
+                    .all(|c| c.is_alphanumeric() || c == '_' || c == '-')
+            {
+                return Some(HxTarget::Id(id.to_string()));
+            }
         }
 
         if let Some(cls) = trimmed.strip_prefix('.') {
-            return Some(HxTarget::Class(cls.trim().to_string()));
+            let cls = cls.trim();
+            if !cls.is_empty()
+                && cls
+                    .chars()
+                    .all(|c| c.is_alphanumeric() || c == '_' || c == '-')
+            {
+                return Some(HxTarget::Class(cls.to_string()));
+            }
         }
 
         Some(HxTarget::Selector(trimmed.to_string()))

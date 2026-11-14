@@ -45,6 +45,20 @@ fn test_position_to_offset_ascii() {
 }
 
 #[test]
+fn test_out_of_range_character_clamped() {
+    let uri = Uri::from_str("file:///workspace/clamp.html").unwrap();
+    let text = "short";
+    let doc = Document::new(uri, 1, text);
+
+    // character 999 exceeds line length, must clamp to end of line without panicking
+    let offset = doc.position_to_offset(Position {
+        line: 0,
+        character: 999,
+    });
+    assert_eq!(offset, Some(5));
+}
+
+#[test]
 fn test_utf16_surrogate_pairs() {
     let uri = Uri::from_str("file:///workspace/emoji.html").unwrap();
     // '😀' is 4 bytes in UTF-8, 2 code units in UTF-16.

@@ -31,7 +31,8 @@ impl Document {
         }
 
         let line = self.rope.line(line_idx);
-        let char_offset_in_line = line.utf16_cu_to_char(position.character as usize);
+        let char_cu = (position.character as usize).min(line.len_utf16_cu());
+        let char_offset_in_line = line.utf16_cu_to_char(char_cu);
         let line_char_start = self.rope.line_to_char(line_idx);
         let total_char_offset = line_char_start + char_offset_in_line;
 

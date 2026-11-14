@@ -7,8 +7,11 @@ pub enum TriggerModifier {
     Throttle(String),
     From(String),
     Target(String),
+    Root(String),
+    Threshold(String),
     Consume,
     Queue(String),
+    Every(String),
     Unknown(String),
 }
 
@@ -27,10 +30,9 @@ pub struct HxTriggerParser;
 
 impl HxTriggerParser {
     /// Parse an `hx-trigger` attribute value into a list of trigger specifications.
-    /// Multiple triggers are separated by commas (e.g. `click, keyup delay:500ms`).
     pub fn parse(input: &str) -> Vec<TriggerSpecification> {
         let mut results = Vec::new();
-        for chunk in input.split(',') {
+        for chunk in Self::split_triggers_by_comma(input) {
             let trimmed = chunk.trim();
             if trimmed.is_empty() {
                 continue;
@@ -43,15 +45,94 @@ impl HxTriggerParser {
         results
     }
 
+    /// Split trigger specifications on commas without breaking bracketed filters `[...]`.
+    fn split_triggers_by_comma(input: &str) -> Vec<String> {
+        let mut chunks = Vec::new();
+        let mut current = String::new();
+        let mut bracket_depth: usize = 0;
+
+        for ch in input.chars() {
+            match ch {
+                '[' => {
+                    bracket_depth += 1;
+                    current.push(ch);
+                }
+                ']' => {
+                    bracket_depth = bracket_depth.saturating_sub(1);
+                    current.push(ch);
+                }
+                ',' if bracket_depth == 0 => {
+                    chunks.push(std::mem::take(&mut current));
+                }
+                _ => current.push(ch),
+            }
+        }
+
+        if !current.trim().is_empty() {
+            chunks.push(current);
+        }
+
+        chunks
+    }
+
+    /// Tokenize while keeping bracketed filters and compound selectors intact.
+    fn tokenize_trigger(input: &str) -> Vec<String> {
+        let mut tokens = Vec::new();
+        let mut current = String::new();
+        let mut bracket_depth: usize = 0;
+
+        for ch in input.chars() {
+            if ch == '[' {
+                bracket_depth += 1;
+                current.push(ch);
+            } else if ch == ']' {
+                bracket_depth = bracket_depth.saturating_sub(1);
+                current.push(ch);
+            } else if ch.is_whitespace() && bracket_depth == 0 {
+                if !current.is_empty() {
+                    tokens.push(std::mem::take(&mut current));
+                }
+            } else {
+                current.push(ch);
+            }
+        }
+
+        if !current.is_empty() {
+            tokens.push(current);
+        }
+
+        tokens
+    }
+
     fn parse_single_trigger(input: &str) -> Option<TriggerSpecification> {
-        let tokens: Vec<&str> = input.split_whitespace().collect();
+        let tokens = Self::tokenize_trigger(input);
         if tokens.is_empty() {
             return None;
         }
 
         let mut token_idx = 0;
-        let first_token = tokens[token_idx];
+        let first_token = &tokens[token_idx];
         token_idx += 1;
+
+        // Check for polling syntax: "every 2s"
+        if first_token == "every" && token_idx < tokens.len() {
+            let duration = tokens[token_idx].clone();
+            token_idx += 1;
+            let mut modifiers = vec![TriggerModifier::Every(duration.clone())];
+
+            while token_idx < tokens.len() {
+                let tok = &tokens[token_idx];
+                token_idx += 1;
+                modifiers.push(Self::parse_modifier(tok, &tokens, &mut token_idx));
+            }
+
+            return Some(TriggerSpecification {
+                event: format!("every {}", duration),
+                filter: None,
+                modifiers,
+                raw: input.to_string(),
+            });
+        }
 
         let (event, filter) = if let Some(bracket_start) = first_token.find('[') {
             let event_name = &first_token[..bracket_start];
@@ -62,8 +143,7 @@ impl HxTriggerParser {
             };
             (event_name.to_string(), Some(filter_content.to_string()))
         } else if token_idx < tokens.len() && tokens[token_idx].starts_with('[') {
-            // Filter might be separated by space: "click [ctrlKey]"
-            let filter_token = tokens[token_idx];
+            let filter_token = &tokens[token_idx];
             token_idx += 1;
             let filter_trimmed = filter_token.trim_start_matches('[').trim_end_matches(']');
             (first_token.to_string(), Some(filter_trimmed.to_string()))
@@ -73,28 +153,9 @@ impl HxTriggerParser {
 
         let mut modifiers = Vec::new();
         while token_idx < tokens.len() {
-            let tok = tokens[token_idx];
+            let tok = &tokens[token_idx];
             token_idx += 1;
-
-            if tok == "once" {
-                modifiers.push(TriggerModifier::Once);
-            } else if tok == "changed" {
-                modifiers.push(TriggerModifier::Changed);
-            } else if tok == "consume" {
-                modifiers.push(TriggerModifier::Consume);
-            } else if let Some(val) = tok.strip_prefix("delay:") {
-                modifiers.push(TriggerModifier::Delay(val.to_string()));
-            } else if let Some(val) = tok.strip_prefix("throttle:") {
-                modifiers.push(TriggerModifier::Throttle(val.to_string()));
-            } else if let Some(val) = tok.strip_prefix("from:") {
-                modifiers.push(TriggerModifier::From(val.to_string()));
-            } else if let Some(val) = tok.strip_prefix("target:") {
-                modifiers.push(TriggerModifier::Target(val.to_string()));
-            } else if let Some(val) = tok.strip_prefix("queue:") {
-                modifiers.push(TriggerModifier::Queue(val.to_string()));
-            } else {
-                modifiers.push(TriggerModifier::Unknown(tok.to_string()));
-            }
+            modifiers.push(Self::parse_modifier(tok, &tokens, &mut token_idx));
         }
 
         Some(TriggerSpecification {
@@ -105,24 +166,76 @@ impl HxTriggerParser {
         })
     }
 
-    /// Validates duration formats like "500ms", "2s", "0.5s".
+    fn parse_modifier(tok: &str, tokens: &[String], token_idx: &mut usize) -> TriggerModifier {
+        if tok == "once" {
+            TriggerModifier::Once
+        } else if tok == "changed" {
+            TriggerModifier::Changed
+        } else if tok == "consume" {
+            TriggerModifier::Consume
+        } else if let Some(val) = tok.strip_prefix("delay:") {
+            TriggerModifier::Delay(val.to_string())
+        } else if let Some(val) = tok.strip_prefix("throttle:") {
+            TriggerModifier::Throttle(val.to_string())
+        } else if let Some(val) = tok.strip_prefix("from:") {
+            let selector = Self::consume_extended_selector(val, tokens, token_idx);
+            TriggerModifier::From(selector)
+        } else if let Some(val) = tok.strip_prefix("target:") {
+            let selector = Self::consume_extended_selector(val, tokens, token_idx);
+            TriggerModifier::Target(selector)
+        } else if let Some(val) = tok.strip_prefix("root:") {
+            let selector = Self::consume_extended_selector(val, tokens, token_idx);
+            TriggerModifier::Root(selector)
+        } else if let Some(val) = tok.strip_prefix("threshold:") {
+            TriggerModifier::Threshold(val.to_string())
+        } else if let Some(val) = tok.strip_prefix("queue:") {
+            TriggerModifier::Queue(val.to_string())
+        } else {
+            TriggerModifier::Unknown(tok.to_string())
+        }
+    }
+
+    fn consume_extended_selector(
+        initial: &str,
+        tokens: &[String],
+        token_idx: &mut usize,
+    ) -> String {
+        let mut selector = initial.to_string();
+        if (initial == "closest" || initial == "find" || initial == "next" || initial == "previous")
+            && *token_idx < tokens.len()
+        {
+            selector.push(' ');
+            selector.push_str(&tokens[*token_idx]);
+            *token_idx += 1;
+        }
+        selector
+    }
+
+    /// Validates duration formats like "500ms", "2s", "0.5s", "1m", or bare numbers like "500".
     pub fn is_valid_duration(duration: &str) -> bool {
-        let (num_part, unit) = if let Some(stripped) = duration.strip_suffix("ms") {
-            (stripped, "ms")
-        } else if let Some(stripped) = duration.strip_suffix('s') {
-            (stripped, "s")
-        } else {
-            return false;
-        };
-
-        if num_part.is_empty() {
+        let trimmed = duration.trim();
+        if trimmed.is_empty() {
             return false;
         }
 
-        if unit == "ms" {
-            num_part.parse::<u64>().is_ok()
-        } else {
-            num_part.parse::<f64>().is_ok()
+        // Bare number: integer milliseconds
+        if trimmed.chars().all(|c| c.is_ascii_digit()) {
+            return trimmed.parse::<u64>().is_ok();
         }
+
+        if let Some(stripped) = trimmed.strip_suffix("ms") {
+            return !stripped.is_empty()
+                && (stripped.parse::<u64>().is_ok() || stripped.parse::<f64>().is_ok());
+        }
+
+        if let Some(stripped) = trimmed.strip_suffix('s') {
+            return !stripped.is_empty() && stripped.parse::<f64>().is_ok();
+        }
+
+        if let Some(stripped) = trimmed.strip_suffix('m') {
+            return !stripped.is_empty() && stripped.parse::<f64>().is_ok();
+        }
+
+        false
     }
 }

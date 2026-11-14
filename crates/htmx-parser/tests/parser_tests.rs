@@ -29,8 +29,34 @@ fn test_trigger_parser() {
     assert!(HxTriggerParser::is_valid_duration("500ms"));
     assert!(HxTriggerParser::is_valid_duration("1s"));
     assert!(HxTriggerParser::is_valid_duration("0.5s"));
+    assert!(HxTriggerParser::is_valid_duration("1m"));
+    assert!(HxTriggerParser::is_valid_duration("500"));
     assert!(!HxTriggerParser::is_valid_duration("invalid"));
-    assert!(!HxTriggerParser::is_valid_duration("500"));
+    assert!(!HxTriggerParser::is_valid_duration(""));
+
+    // Polling trigger
+    let polling = HxTriggerParser::parse("every 2s");
+    assert_eq!(polling.len(), 1);
+    assert_eq!(polling[0].event, "every 2s");
+    assert!(polling[0]
+        .modifiers
+        .contains(&TriggerModifier::Every("2s".to_string())));
+
+    // Compound filter with spaces
+    let compound_filter = HxTriggerParser::parse("click[ctrlKey && shiftKey] once");
+    assert_eq!(compound_filter.len(), 1);
+    assert_eq!(compound_filter[0].event, "click");
+    assert_eq!(
+        compound_filter[0].filter.as_deref(),
+        Some("ctrlKey && shiftKey")
+    );
+
+    // Extended selector modifier
+    let from_closest = HxTriggerParser::parse("submit from:closest form");
+    assert_eq!(from_closest.len(), 1);
+    assert!(from_closest[0]
+        .modifiers
+        .contains(&TriggerModifier::From("closest form".to_string())));
 }
 
 #[test]
@@ -72,6 +98,10 @@ fn test_target_parser() {
     assert_eq!(
         HxTargetParser::parse("#main-content"),
         Some(HxTarget::Id("main-content".to_string()))
+    );
+    assert_eq!(
+        HxTargetParser::parse("#list > li"),
+        Some(HxTarget::Selector("#list > li".to_string()))
     );
     assert_eq!(
         HxTargetParser::parse(".active-tab"),

@@ -88,7 +88,12 @@ impl Server {
 
     fn handle_request(&mut self, req: Request) {
         if self.cancelled_requests.remove(&req.id) {
-            info!("Skipping cancelled request: {:?}", req.id);
+            info!("Request was canceled: {:?}", req.id);
+            self.send_response(Response::new_err(
+                req.id,
+                lsp_server::ErrorCode::RequestCanceled as i32,
+                "Request canceled".to_string(),
+            ));
             return;
         }
 
@@ -101,6 +106,11 @@ impl Server {
                     Ok(p) => p,
                     Err(err) => {
                         error!("Failed to parse completion params: {:?}", err);
+                        self.send_response(Response::new_err(
+                            id,
+                            lsp_server::ErrorCode::InvalidParams as i32,
+                            format!("Invalid completion params: {}", err),
+                        ));
                         return;
                     }
                 };
@@ -113,6 +123,11 @@ impl Server {
                     Ok(p) => p,
                     Err(err) => {
                         error!("Failed to parse hover params: {:?}", err);
+                        self.send_response(Response::new_err(
+                            id,
+                            lsp_server::ErrorCode::InvalidParams as i32,
+                            format!("Invalid hover params: {}", err),
+                        ));
                         return;
                     }
                 };
@@ -125,6 +140,11 @@ impl Server {
                     Ok(p) => p,
                     Err(err) => {
                         error!("Failed to parse code action params: {:?}", err);
+                        self.send_response(Response::new_err(
+                            id,
+                            lsp_server::ErrorCode::InvalidParams as i32,
+                            format!("Invalid code action params: {}", err),
+                        ));
                         return;
                     }
                 };
