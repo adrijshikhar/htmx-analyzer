@@ -29,7 +29,7 @@ impl CodeActionProvider {
         actions
     }
 
-    #[allow(clippy::mutable_key_type)]
+    #[allow(clippy::mutable_key_type, clippy::question_mark)]
     fn fix_deprecated_attribute(doc: &Document, diag: &Diagnostic) -> Option<CodeAction> {
         let start_offset = doc.position_to_offset(diag.range.start)?;
         let end_offset = doc.position_to_offset(diag.range.end)?;
