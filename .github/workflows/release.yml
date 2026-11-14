@@ -19,15 +19,19 @@ jobs:
           - target: aarch64-apple-darwin
             os: macos-latest
             archive: tar.gz
+            asset_name: htmx-analyzer-darwin-arm64
           - target: x86_64-apple-darwin
             os: macos-latest
             archive: tar.gz
+            asset_name: htmx-analyzer-darwin-x64
           - target: x86_64-unknown-linux-musl
             os: ubuntu-latest
             archive: tar.gz
+            asset_name: htmx-analyzer-linux-x64
           - target: x86_64-pc-windows-msvc
             os: windows-latest
             archive: zip
+            asset_name: htmx-analyzer-windows-x64.exe
 
     steps:
       - name: Checkout repository
@@ -48,22 +52,26 @@ jobs:
       - name: Build release binary
         run: cargo build --release --locked --target ${{ matrix.target }} -p htmx-analyzer
 
-      - name: Package archive (Unix)
+      - name: Package artifacts (Unix)
         if: matrix.os != 'windows-latest'
         run: |
           mkdir -p dist
+          cp "target/${{ matrix.target }}/release/htmx-analyzer" "dist/${{ matrix.asset_name }}"
           ARCHIVE_NAME="htmx-analyzer-${{ matrix.target }}.tar.gz"
           tar -czf "dist/$ARCHIVE_NAME" -C "target/${{ matrix.target }}/release" htmx-analyzer
           cd dist && shasum -a 256 "$ARCHIVE_NAME" > "$ARCHIVE_NAME.sha256"
+          shasum -a 256 "${{ matrix.asset_name }}" > "${{ matrix.asset_name }}.sha256"
 
-      - name: Package archive (Windows)
+      - name: Package artifacts (Windows)
         if: matrix.os == 'windows-latest'
         shell: bash
         run: |
           mkdir -p dist
+          cp "./target/${{ matrix.target }}/release/htmx-analyzer.exe" "dist/${{ matrix.asset_name }}"
           ARCHIVE_NAME="htmx-analyzer-${{ matrix.target }}.zip"
           7z a "dist/$ARCHIVE_NAME" "./target/${{ matrix.target }}/release/htmx-analyzer.exe"
           cd dist && sha256sum "$ARCHIVE_NAME" > "$ARCHIVE_NAME.sha256"
+          sha256sum "${{ matrix.asset_name }}" > "${{ matrix.asset_name }}.sha256"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb99ba8afd # v4.6.1
