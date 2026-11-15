@@ -29,7 +29,9 @@ htmx-analyzer/
 ## Editor Setup
 
 ### Zed
-You can configure `htmx-analyzer` as an external language server in your Zed `settings.json`:
+Install the official Zed extension [**`zed-htmx`**](https://github.com/adrijshikhar/zed-htmx) for zero-configuration setup and automatic binary management.
+
+Alternatively, you can configure `htmx-analyzer` manually as an external language server in your Zed `settings.json`:
 ```json
 {
   "lsp": {
