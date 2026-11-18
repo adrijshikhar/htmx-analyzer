@@ -1,3 +1,4 @@
+use crate::config::Config;
 use htmx_parser::{
     document_ids, lex, HxSwapParser, HxTarget, HxTargetParser, HxTriggerParser, SwapModifier,
     TriggerModifier, MAX_FILE_SIZE,
@@ -9,7 +10,7 @@ use lsp_types::{Diagnostic, DiagnosticSeverity, NumberOrString, Range};
 pub struct DiagnosticEngine;
 
 impl DiagnosticEngine {
-    pub fn validate(doc: &Document) -> Vec<Diagnostic> {
+    pub fn validate(doc: &Document, config: &Config) -> Vec<Diagnostic> {
         let text = doc.text();
         if text.len() > MAX_FILE_SIZE {
             return Vec::new();
@@ -18,6 +19,20 @@ impl DiagnosticEngine {
         let tags = lex(&text);
         let doc_ids = document_ids(&tags);
         let mut diagnostics = Vec::new();
+
+        let mut push_diag =
+            |code: &str, builtin: DiagnosticSeverity, range: Range, message: String| {
+                if let Some(severity) = config.severity(code, builtin) {
+                    diagnostics.push(Diagnostic {
+                        range,
+                        severity: Some(severity),
+                        code: Some(NumberOrString::String(code.to_string())),
+                        source: Some("htmx-analyzer".to_string()),
+                        message,
+                        ..Default::default()
+                    });
+                }
+            };
 
         for tag in &tags {
             for attr in &tag.attributes {
@@ -31,17 +46,15 @@ impl DiagnosticEngine {
                                 doc.offset_to_position(attr.name_range.start),
                                 doc.offset_to_position(attr.name_range.end),
                             ) {
-                                diagnostics.push(Diagnostic {
-                                    range: Range {
+                                push_diag(
+                                    "HTMX001",
+                                    DiagnosticSeverity::WARNING,
+                                    Range {
                                         start: start_pos,
                                         end: end_pos,
                                     },
-                                    severity: Some(DiagnosticSeverity::WARNING),
-                                    code: Some(NumberOrString::String("HTMX001".to_string())),
-                                    source: Some("htmx-analyzer".to_string()),
-                                    message: dep_msg.to_string(),
-                                    ..Default::default()
-                                });
+                                    dep_msg.to_string(),
+                                );
                             }
                         }
                     }
@@ -67,17 +80,15 @@ impl DiagnosticEngine {
                                     doc.offset_to_position(val.range.start),
                                     doc.offset_to_position(val.range.end),
                                 ) {
-                                    diagnostics.push(Diagnostic {
-                                        range: Range { start: s, end: e },
-                                        severity: Some(DiagnosticSeverity::ERROR),
-                                        code: Some(NumberOrString::String("HTMX002".to_string())),
-                                        source: Some("htmx-analyzer".to_string()),
-                                        message: format!(
+                                    push_diag(
+                                        "HTMX002",
+                                        DiagnosticSeverity::ERROR,
+                                        Range { start: s, end: e },
+                                        format!(
                                             "Unknown swap style '{}'. Valid styles: innerHTML, outerHTML, beforebegin, afterbegin, beforeend, afterend, delete, none.",
                                             style
                                         ),
-                                        ..Default::default()
-                                    });
+                                    );
                                 }
                             }
                         }
@@ -91,17 +102,15 @@ impl DiagnosticEngine {
                                         doc.offset_to_position(val.range.start),
                                         doc.offset_to_position(val.range.end),
                                     ) {
-                                        diagnostics.push(Diagnostic {
-                                            range: Range { start: s, end: e },
-                                            severity: Some(DiagnosticSeverity::ERROR),
-                                            code: Some(NumberOrString::String("HTMX002".to_string())),
-                                            source: Some("htmx-analyzer".to_string()),
-                                            message: format!(
+                                        push_diag(
+                                            "HTMX002",
+                                            DiagnosticSeverity::ERROR,
+                                            Range { start: s, end: e },
+                                            format!(
                                                 "Invalid swap timing '{}'. Expected format like '500ms' or '1s'.",
                                                 d
                                             ),
-                                            ..Default::default()
-                                        });
+                                        );
                                     }
                                 }
                                 SwapModifier::Unknown(u) => {
@@ -109,16 +118,12 @@ impl DiagnosticEngine {
                                         doc.offset_to_position(val.range.start),
                                         doc.offset_to_position(val.range.end),
                                     ) {
-                                        diagnostics.push(Diagnostic {
-                                            range: Range { start: s, end: e },
-                                            severity: Some(DiagnosticSeverity::WARNING),
-                                            code: Some(NumberOrString::String(
-                                                "HTMX002".to_string(),
-                                            )),
-                                            source: Some("htmx-analyzer".to_string()),
-                                            message: format!("Unknown swap modifier '{}'.", u),
-                                            ..Default::default()
-                                        });
+                                        push_diag(
+                                            "HTMX002",
+                                            DiagnosticSeverity::WARNING,
+                                            Range { start: s, end: e },
+                                            format!("Unknown swap modifier '{}'.", u),
+                                        );
                                     }
                                 }
                                 _ => {}
@@ -138,19 +143,15 @@ impl DiagnosticEngine {
                                             doc.offset_to_position(val.range.start),
                                             doc.offset_to_position(val.range.end),
                                         ) {
-                                            diagnostics.push(Diagnostic {
-                                                range: Range { start: s, end: e },
-                                                severity: Some(DiagnosticSeverity::ERROR),
-                                                code: Some(NumberOrString::String(
-                                                    "HTMX003".to_string(),
-                                                )),
-                                                source: Some("htmx-analyzer".to_string()),
-                                                message: format!(
+                                            push_diag(
+                                                "HTMX003",
+                                                DiagnosticSeverity::ERROR,
+                                                Range { start: s, end: e },
+                                                format!(
                                                     "Invalid delay duration '{}'. Expected format like '500ms' or '1s'.",
                                                     d
                                                 ),
-                                                ..Default::default()
-                                            });
+                                            );
                                         }
                                     }
                                     TriggerModifier::Throttle(d)
@@ -160,19 +161,15 @@ impl DiagnosticEngine {
                                             doc.offset_to_position(val.range.start),
                                             doc.offset_to_position(val.range.end),
                                         ) {
-                                            diagnostics.push(Diagnostic {
-                                                range: Range { start: s, end: e },
-                                                severity: Some(DiagnosticSeverity::ERROR),
-                                                code: Some(NumberOrString::String(
-                                                    "HTMX003".to_string(),
-                                                )),
-                                                source: Some("htmx-analyzer".to_string()),
-                                                message: format!(
+                                            push_diag(
+                                                "HTMX003",
+                                                DiagnosticSeverity::ERROR,
+                                                Range { start: s, end: e },
+                                                format!(
                                                     "Invalid throttle duration '{}'. Expected format like '500ms' or '1s'.",
                                                     d
                                                 ),
-                                                ..Default::default()
-                                            });
+                                            );
                                         }
                                     }
                                     TriggerModifier::Every(d)
@@ -182,19 +179,15 @@ impl DiagnosticEngine {
                                             doc.offset_to_position(val.range.start),
                                             doc.offset_to_position(val.range.end),
                                         ) {
-                                            diagnostics.push(Diagnostic {
-                                                range: Range { start: s, end: e },
-                                                severity: Some(DiagnosticSeverity::ERROR),
-                                                code: Some(NumberOrString::String(
-                                                    "HTMX003".to_string(),
-                                                )),
-                                                source: Some("htmx-analyzer".to_string()),
-                                                message: format!(
+                                            push_diag(
+                                                "HTMX003",
+                                                DiagnosticSeverity::ERROR,
+                                                Range { start: s, end: e },
+                                                format!(
                                                     "Invalid polling interval '{}'. Expected format like '2s'.",
                                                     d
                                                 ),
-                                                ..Default::default()
-                                            });
+                                            );
                                         }
                                     }
                                     TriggerModifier::Unknown(u) => {
@@ -202,19 +195,12 @@ impl DiagnosticEngine {
                                             doc.offset_to_position(val.range.start),
                                             doc.offset_to_position(val.range.end),
                                         ) {
-                                            diagnostics.push(Diagnostic {
-                                                range: Range { start: s, end: e },
-                                                severity: Some(DiagnosticSeverity::WARNING),
-                                                code: Some(NumberOrString::String(
-                                                    "HTMX003".to_string(),
-                                                )),
-                                                source: Some("htmx-analyzer".to_string()),
-                                                message: format!(
-                                                    "Unknown trigger modifier '{}'.",
-                                                    u
-                                                ),
-                                                ..Default::default()
-                                            });
+                                            push_diag(
+                                                "HTMX003",
+                                                DiagnosticSeverity::WARNING,
+                                                Range { start: s, end: e },
+                                                format!("Unknown trigger modifier '{}'.", u),
+                                            );
                                         }
                                     }
                                     _ => {}
@@ -230,17 +216,15 @@ impl DiagnosticEngine {
                                     doc.offset_to_position(val.range.start),
                                     doc.offset_to_position(val.range.end),
                                 ) {
-                                    diagnostics.push(Diagnostic {
-                                        range: Range { start: s, end: e },
-                                        severity: Some(DiagnosticSeverity::WARNING),
-                                        code: Some(NumberOrString::String("HTMX004".to_string())),
-                                        source: Some("htmx-analyzer".to_string()),
-                                        message: format!(
+                                    push_diag(
+                                        "HTMX004",
+                                        DiagnosticSeverity::WARNING,
+                                        Range { start: s, end: e },
+                                        format!(
                                             "Target element ID '#{}' was not found in the current document.",
                                             target_id
                                         ),
-                                        ..Default::default()
-                                    });
+                                    );
                                 }
                             }
                         }
