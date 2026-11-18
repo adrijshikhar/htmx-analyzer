@@ -11,6 +11,10 @@ description = "HTMX 2.0 Language Server binary"
 name = "htmx-analyzer"
 path = "src/main.rs"
 
+[lib]
+name = "htmx_analyzer"
+path = "src/lib.rs"
+
 [dependencies]
 htmx-schema = { workspace = true }
 htmx-parser = { workspace = true }
