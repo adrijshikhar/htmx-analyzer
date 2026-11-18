@@ -74,6 +74,9 @@ fn test_all_core_attributes_present() {
         "hx-preserve",
         "hx-history",
         "hx-history-elt",
+        "hx-disable",
+        "hx-inherit",
+        "hx-request",
     ];
 
     for attr in required {
@@ -83,6 +86,13 @@ fn test_all_core_attributes_present() {
             attr
         );
     }
+}
+
+#[test]
+fn trigger_events_include_common_dom_events() {
+    assert!(TRIGGER_EVENTS.contains(&"input"));
+    assert!(TRIGGER_EVENTS.contains(&"focus"));
+    assert!(TRIGGER_EVENTS.contains(&"blur"));
 }
 
 #[test]
