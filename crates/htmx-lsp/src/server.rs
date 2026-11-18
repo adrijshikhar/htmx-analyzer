@@ -14,6 +14,13 @@ use lsp_types::{
 use std::error::Error;
 use tracing::{debug, error, info, trace, warn};
 
+/// LSP exit kind returned when the server terminates.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExitKind {
+    Clean,
+    NoShutdown,
+}
+
 pub struct Server {
     connection: Connection,
     service: HtmxLanguageService,
@@ -29,7 +36,7 @@ impl Server {
         }
     }
 
-    pub fn run(mut self) -> Result<(), Box<dyn Error + Send + Sync>> {
+    pub fn run(mut self) -> Result<ExitKind, Box<dyn Error + Send + Sync>> {
         let capabilities = ServerCapabilities {
             text_document_sync: Some(TextDocumentSyncCapability::Kind(
                 TextDocumentSyncKind::INCREMENTAL,
@@ -67,8 +74,9 @@ impl Server {
         while let Ok(msg) = receiver.recv() {
             match msg {
                 Message::Request(req) => {
-                    if self.connection.handle_shutdown(&req)? {
+                    if req.method == "shutdown" {
                         info!("Received shutdown request; transitioning to shutdown state.");
+                        self.send_response(Response::new_ok(req.id, serde_json::Value::Null));
                         is_shutdown = true;
                         continue;
                     }
@@ -80,21 +88,36 @@ impl Server {
                         ));
                         continue;
                     }
-                    self.handle_request(req);
+
+                    let id = req.id.clone();
+                    let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        self.handle_request(req);
+                    }));
+                    if res.is_err() {
+                        error!("Panic while handling request {}", id);
+                        self.send_response(Response::new_err(
+                            id,
+                            lsp_server::ErrorCode::InternalError as i32,
+                            "Internal server error".to_string(),
+                        ));
+                    }
                 }
                 Message::Notification(not) => {
                     if not.method == "exit" {
                         info!("Received exit notification; exiting process.");
                         if is_shutdown {
-                            return Ok(());
+                            return Ok(ExitKind::Clean);
                         } else {
-                            std::process::exit(1);
+                            return Ok(ExitKind::NoShutdown);
                         }
                     }
                     if is_shutdown {
                         continue;
                     }
-                    self.handle_notification(not);
+
+                    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        self.handle_notification(not);
+                    }));
                 }
                 Message::Response(_resp) => {
                     trace!("Received unhandled response");
@@ -102,12 +125,21 @@ impl Server {
             }
         }
 
-        Ok(())
+        Ok(if is_shutdown {
+            ExitKind::Clean
+        } else {
+            ExitKind::NoShutdown
+        })
     }
 
     fn handle_request(&mut self, req: Request) {
         let id = req.id.clone();
         let method = req.method.as_str();
+
+        #[cfg(test)]
+        if method == "htmx-analyzer/__testPanic" {
+            panic!("intentional test panic");
+        }
 
         match method {
             Completion::METHOD => {
@@ -234,5 +266,140 @@ impl Server {
         if let Err(err) = self.connection.sender.send(Message::Notification(not)) {
             error!("Failed to send publishDiagnostics notification: {:?}", err);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use lsp_server::{Message, Notification, Request, RequestId};
+    use lsp_types::{Position, TextDocumentItem};
+    use std::str::FromStr;
+    use std::time::Duration;
+
+    #[test]
+    fn request_panic_returns_internal_error_and_server_continues() {
+        let (server_conn, client_conn) = Connection::memory();
+        let server = Server::new(server_conn);
+        let handle = std::thread::spawn(move || server.run().expect("server run failed"));
+
+        // Initialize handshake
+        let init_req = Request::new(
+            RequestId::from(1),
+            "initialize".to_string(),
+            serde_json::json!({ "capabilities": {} }),
+        );
+        client_conn.sender.send(Message::Request(init_req)).unwrap();
+        let _init_resp = client_conn
+            .receiver
+            .recv_timeout(Duration::from_secs(5))
+            .expect("init resp");
+        client_conn
+            .sender
+            .send(Message::Notification(Notification::new(
+                "initialized".to_string(),
+                serde_json::json!({}),
+            )))
+            .unwrap();
+
+        // Open a document
+        let doc_item = TextDocumentItem {
+            uri: lsp_types::Uri::from_str("file:///test.html").unwrap(),
+            language_id: "html".to_string(),
+            version: 1,
+            text: "<button hx-get=\"/api\">Click</button>".to_string(),
+        };
+        client_conn
+            .sender
+            .send(Message::Notification(Notification::new(
+                "textDocument/didOpen".to_string(),
+                serde_json::to_value(lsp_types::DidOpenTextDocumentParams {
+                    text_document: doc_item,
+                })
+                .unwrap(),
+            )))
+            .unwrap();
+
+        // Send panic request
+        let panic_req = Request::new(
+            RequestId::from(2),
+            "htmx-analyzer/__testPanic".to_string(),
+            serde_json::Value::Null,
+        );
+        client_conn
+            .sender
+            .send(Message::Request(panic_req))
+            .unwrap();
+
+        // Expect -32603 response
+        let resp = loop {
+            match client_conn
+                .receiver
+                .recv_timeout(Duration::from_secs(5))
+                .expect("recv panic resp")
+            {
+                Message::Response(r) if r.id == RequestId::from(2) => break r,
+                _ => continue,
+            }
+        };
+        assert_eq!(
+            resp.response_result.unwrap_err().code,
+            lsp_server::ErrorCode::InternalError as i32
+        );
+
+        // A following hover on an open document → Ok
+        let hover_req = Request::new(
+            RequestId::from(3),
+            "textDocument/hover".to_string(),
+            serde_json::to_value(lsp_types::HoverParams {
+                text_document_position_params: lsp_types::TextDocumentPositionParams {
+                    text_document: lsp_types::TextDocumentIdentifier {
+                        uri: lsp_types::Uri::from_str("file:///test.html").unwrap(),
+                    },
+                    position: Position {
+                        line: 0,
+                        character: 10,
+                    },
+                },
+                work_done_progress_params: Default::default(),
+            })
+            .unwrap(),
+        );
+        client_conn
+            .sender
+            .send(Message::Request(hover_req))
+            .unwrap();
+
+        let hover_resp = loop {
+            match client_conn
+                .receiver
+                .recv_timeout(Duration::from_secs(5))
+                .expect("recv hover resp")
+            {
+                Message::Response(r) if r.id == RequestId::from(3) => break r,
+                _ => continue,
+            }
+        };
+        assert!(hover_resp.response_result.is_ok());
+
+        // Clean exit
+        client_conn
+            .sender
+            .send(Message::Request(Request::new(
+                RequestId::from(4),
+                "shutdown".to_string(),
+                serde_json::Value::Null,
+            )))
+            .unwrap();
+        client_conn
+            .sender
+            .send(Message::Notification(Notification::new(
+                "exit".to_string(),
+                serde_json::Value::Null,
+            )))
+            .unwrap();
+
+        let exit_kind = handle.join().expect("join failed");
+        assert_eq!(exit_kind, ExitKind::Clean);
     }
 }

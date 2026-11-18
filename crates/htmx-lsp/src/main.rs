@@ -1,14 +1,12 @@
 #![forbid(unsafe_code)]
 
 use clap::Parser;
+use htmx_analyzer::{ExitKind, Server};
 use lsp_server::Connection;
 use std::fs::OpenOptions;
 use std::path::PathBuf;
 use tracing::info;
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
-
-mod handler;
-mod server;
 
 /// A fast, production-grade HTMX 2.0 language server and static analyzer
 #[derive(Parser, Debug)]
@@ -63,11 +61,14 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     );
 
     let (connection, io_threads) = Connection::stdio();
-    let server = server::Server::new(connection);
+    let server = Server::new(connection);
 
-    server.run()?;
+    let exit_kind = server.run()?;
     io_threads.join()?;
 
     info!("htmx-analyzer shutdown complete.");
+    if exit_kind == ExitKind::NoShutdown {
+        std::process::exit(1);
+    }
     Ok(())
 }
