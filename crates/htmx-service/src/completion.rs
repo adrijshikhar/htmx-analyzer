@@ -1,4 +1,4 @@
-use htmx_parser::{CursorPositionKind, CursorScanner, HtmlDocument};
+use htmx_parser::{document_ids, lex, CursorPositionKind, CursorScanner};
 use htmx_schema::*;
 use lsp_types::{
     CompletionItem, CompletionItemKind, Documentation, InsertTextFormat, MarkupContent, MarkupKind,
@@ -242,9 +242,9 @@ impl CompletionProvider {
                     }
                 }
 
-                // Document IDs extracted with Tree-Sitter
-                let doc = HtmlDocument::parse(source);
-                for id in doc.document_ids {
+                // Document IDs extracted with the linear lexer
+                let tags = lex(source);
+                for id in document_ids(&tags) {
                     let label = format!("#{}", id);
                     if last_token.is_empty()
                         || label.starts_with(last_token)
