@@ -1,3 +1,4 @@
+use htmx_parser::{lex, Attribute, Tag};
 use htmx_schema::canonical_name;
 use htmx_vfs::Document;
 use lsp_types::{
@@ -32,56 +33,56 @@ impl CodeActionProvider {
     #[allow(clippy::mutable_key_type, clippy::question_mark)]
     fn fix_deprecated_attribute(doc: &Document, diag: &Diagnostic) -> Option<CodeAction> {
         let start_offset = doc.position_to_offset(diag.range.start)?;
-        let end_offset = doc.position_to_offset(diag.range.end)?;
         let text = doc.text();
 
-        if start_offset > end_offset || end_offset > text.len() {
-            return None;
-        }
-
-        let attr_name = &text[start_offset..end_offset];
-        let norm_name = canonical_name(attr_name);
-
-        if norm_name != "hx-ws" && norm_name != "hx-sse" {
-            return None;
-        }
-
-        // Scan full attribute including value
-        let rest = &text[end_offset..];
-        let mut full_end_offset = end_offset;
-        let mut attr_val: Option<&str> = None;
-
-        let trimmed_rest = rest.trim_start();
-        if let Some(stripped) = trimmed_rest.strip_prefix('=') {
-            let after_eq = stripped.trim_start();
-            if after_eq.starts_with('"') || after_eq.starts_with('\'') {
-                let quote = after_eq.chars().next()?;
-                let inner = &after_eq[1..];
-                let close_idx = inner.find(quote)?;
-                attr_val = Some(&inner[..close_idx]);
-                let prefix_len = text.len() - after_eq.len() + 1;
-                full_end_offset = prefix_len + close_idx + 1;
-            } else {
-                let val_len = after_eq
-                    .find(|c: char| c.is_whitespace() || c == '>')
-                    .unwrap_or(after_eq.len());
-                let val = &after_eq[..val_len];
-                if !val.is_empty() {
-                    attr_val = Some(val);
-                    let prefix_len = text.len() - after_eq.len();
-                    full_end_offset = prefix_len + val_len;
+        let tags = lex(&text);
+        let mut target: Option<(&Tag, &Attribute)> = None;
+        'outer: for tag in &tags {
+            for attr in &tag.attributes {
+                if attr.name_range.start == start_offset {
+                    target = Some((tag, attr));
+                    break 'outer;
                 }
             }
         }
 
-        let new_text = if norm_name == "hx-ws" {
-            if let Some(val) = attr_val {
-                let mut parts = Vec::new();
-                let mut has_connect = false;
-                for part in val.split_whitespace() {
+        let (tag, attr) = target?;
+        let norm_name = canonical_name(attr.name);
+        if norm_name != "hx-ws" && norm_name != "hx-sse" {
+            return None;
+        }
+
+        // No action when deprecated attribute's value is dynamic
+        if let Some(val) = &attr.value {
+            if val.is_dynamic() {
+                return None;
+            }
+        }
+
+        // Or when tag's hx-ext/data-hx-ext value is dynamic
+        let existing_ext_attr = tag
+            .attributes
+            .iter()
+            .find(|a| canonical_name(a.name) == "hx-ext");
+        if let Some(ext_attr) = existing_ext_attr {
+            if let Some(val) = &ext_attr.value {
+                if val.is_dynamic() {
+                    return None;
+                }
+            }
+        }
+
+        let ext_name = if norm_name == "hx-ws" { "ws" } else { "sse" };
+
+        let mut parts = Vec::new();
+        let mut has_connect = false;
+
+        if let Some(val) = &attr.value {
+            if norm_name == "hx-ws" {
+                for part in val.text.split_whitespace() {
                     if let Some(url) = part.strip_prefix("connect:") {
                         has_connect = true;
-                        parts.push(format!("ws-connect=\"{}\"", url));
+                        parts.push(format!("ws-connect=\"{}\"", url.replace('"', "&quot;")));
                     } else if part == "send" {
                         parts.push("ws-send".to_string());
                     } else {
@@ -89,63 +90,102 @@ impl CodeActionProvider {
                         return None;
                     }
                 }
-                if parts.is_empty() {
-                    return None;
-                }
-                if has_connect {
-                    format!("hx-ext=\"ws\" {}", parts.join(" "))
-                } else {
-                    parts.join(" ")
-                }
             } else {
-                "hx-ext=\"ws\"".to_string()
-            }
-        } else if let Some(val) = attr_val {
-            let mut parts = Vec::new();
-            let mut has_connect = false;
-            for part in val.split_whitespace() {
-                if let Some(url) = part.strip_prefix("connect:") {
-                    has_connect = true;
-                    parts.push(format!("sse-connect=\"{}\"", url));
-                } else if let Some(evt) = part.strip_prefix("swap:") {
-                    parts.push(format!("sse-swap=\"{}\"", evt));
-                } else {
-                    // Unrecognized part: cannot safely migrate
-                    return None;
+                for part in val.text.split_whitespace() {
+                    if let Some(url) = part.strip_prefix("connect:") {
+                        has_connect = true;
+                        parts.push(format!("sse-connect=\"{}\"", url.replace('"', "&quot;")));
+                    } else if let Some(evt) = part.strip_prefix("swap:") {
+                        parts.push(format!("sse-swap=\"{}\"", evt.replace('"', "&quot;")));
+                    } else {
+                        // Unrecognized part: cannot safely migrate
+                        return None;
+                    }
                 }
             }
             if parts.is_empty() {
                 return None;
             }
-            if has_connect {
-                format!("hx-ext=\"sse\" {}", parts.join(" "))
+        }
+
+        let needs_ext = has_connect || attr.value.is_none();
+        let mut edits = Vec::new();
+
+        if needs_ext {
+            if let Some(ext_attr) = existing_ext_attr {
+                let already_listed = ext_attr
+                    .value
+                    .as_ref()
+                    .is_some_and(|v| v.text.split(',').any(|item| item.trim() == ext_name));
+
+                if !already_listed {
+                    let ext_new_text = match &ext_attr.value {
+                        None => format!("{}=\"{}\"", ext_attr.name, ext_name),
+                        Some(v) => {
+                            let trimmed = v.text.trim();
+                            if trimmed.is_empty() {
+                                format!("{}=\"{}\"", ext_attr.name, ext_name)
+                            } else {
+                                format!("{}=\"{}, {}\"", ext_attr.name, trimmed, ext_name)
+                            }
+                        }
+                    };
+                    let ext_start_pos = doc.offset_to_position(ext_attr.name_range.start)?;
+                    let ext_end_pos = doc.offset_to_position(ext_attr.end)?;
+                    edits.push(TextEdit {
+                        range: Range {
+                            start: ext_start_pos,
+                            end: ext_end_pos,
+                        },
+                        new_text: ext_new_text,
+                    });
+                }
+
+                let deprecated_new_text = parts.join(" ");
+                let dep_start_pos = doc.offset_to_position(attr.name_range.start)?;
+                let dep_end_pos = doc.offset_to_position(attr.end)?;
+                edits.push(TextEdit {
+                    range: Range {
+                        start: dep_start_pos,
+                        end: dep_end_pos,
+                    },
+                    new_text: deprecated_new_text,
+                });
             } else {
-                parts.join(" ")
+                let deprecated_new_text = if parts.is_empty() {
+                    format!("hx-ext=\"{}\"", ext_name)
+                } else {
+                    format!("hx-ext=\"{}\" {}", ext_name, parts.join(" "))
+                };
+                let dep_start_pos = doc.offset_to_position(attr.name_range.start)?;
+                let dep_end_pos = doc.offset_to_position(attr.end)?;
+                edits.push(TextEdit {
+                    range: Range {
+                        start: dep_start_pos,
+                        end: dep_end_pos,
+                    },
+                    new_text: deprecated_new_text,
+                });
             }
         } else {
-            "hx-ext=\"sse\"".to_string()
-        };
-
-        let start_pos = doc.offset_to_position(start_offset)?;
-        let end_pos = doc.offset_to_position(full_end_offset)?;
-        let full_range = Range {
-            start: start_pos,
-            end: end_pos,
-        };
+            let deprecated_new_text = parts.join(" ");
+            let dep_start_pos = doc.offset_to_position(attr.name_range.start)?;
+            let dep_end_pos = doc.offset_to_position(attr.end)?;
+            edits.push(TextEdit {
+                range: Range {
+                    start: dep_start_pos,
+                    end: dep_end_pos,
+                },
+                new_text: deprecated_new_text,
+            });
+        }
 
         let mut changes = HashMap::new();
-        changes.insert(
-            doc.uri.clone(),
-            vec![TextEdit {
-                range: full_range,
-                new_text,
-            }],
-        );
+        changes.insert(doc.uri.clone(), edits);
 
         let title = format!(
             "Migrate {} to HTMX 2.0 extension (hx-ext=\"{}\")",
-            norm_name,
-            if norm_name == "hx-ws" { "ws" } else { "sse" }
+            norm_name, ext_name
         );
 
         Some(CodeAction {

@@ -455,3 +455,138 @@ fn polling_interval_validated() {
     let diags_ok = service.validate(&doc_ok);
     assert_eq!(diags_ok.len(), 0);
 }
+
+fn apply_edits(text: &str, edits: &[lsp_types::TextEdit]) -> String {
+    let doc = Document::new(Uri::from_str("file:///test.html").unwrap(), 1, text);
+    let mut sorted_edits = edits.to_vec();
+    sorted_edits.sort_by(|a, b| {
+        let a_start = doc.position_to_offset(a.range.start).unwrap();
+        let b_start = doc.position_to_offset(b.range.start).unwrap();
+        b_start.cmp(&a_start)
+    });
+
+    let mut result = text.to_string();
+    for edit in sorted_edits {
+        let start = doc.position_to_offset(edit.range.start).unwrap();
+        let end = doc.position_to_offset(edit.range.end).unwrap();
+        result.replace_range(start..end, &edit.new_text);
+    }
+    result
+}
+
+#[allow(clippy::mutable_key_type)]
+fn run_quick_fix(html: &str) -> Option<String> {
+    let service = HtmxLanguageService::new();
+    let uri = Uri::from_str("file:///test.html").unwrap();
+    let doc = Document::new(uri.clone(), 1, html);
+    let diags = service.validate(&doc);
+    let htmx001 = diags
+        .iter()
+        .find(|d| d.code == Some(lsp_types::NumberOrString::String("HTMX001".to_string())))?;
+    let actions = service.code_actions(&doc, htmx001.range, &diags);
+    if actions.is_empty() {
+        return None;
+    }
+    match &actions[0] {
+        lsp_types::CodeActionOrCommand::CodeAction(ca) => {
+            let changes = ca.edit.as_ref()?.changes.as_ref()?;
+            let edits = changes.get(&uri)?;
+            Some(apply_edits(html, edits))
+        }
+        _ => None,
+    }
+}
+
+#[test]
+fn quick_fix_merges_existing_hx_ext() {
+    let html = r#"<div hx-ext="json-enc" hx-ws="connect:/chat send">x</div>"#;
+    let fixed = run_quick_fix(html).expect("expected quick fix");
+    assert_eq!(
+        fixed,
+        r#"<div hx-ext="json-enc, ws" ws-connect="/chat" ws-send>x</div>"#
+    );
+}
+
+#[test]
+fn quick_fix_skips_ext_already_listed() {
+    let html = r#"<div hx-ext="ws" hx-ws="connect:/c">x</div>"#;
+    let fixed = run_quick_fix(html).expect("expected quick fix");
+    assert_eq!(fixed, r#"<div hx-ext="ws" ws-connect="/c">x</div>"#);
+}
+
+#[test]
+fn quick_fix_escapes_quotes() {
+    let html = r#"<div hx-ws='connect:/a?q="x"'>x</div>"#;
+    let fixed = run_quick_fix(html).expect("expected quick fix");
+    assert_eq!(
+        fixed,
+        r#"<div hx-ext="ws" ws-connect="/a?q=&quot;x&quot;">x</div>"#
+    );
+}
+
+#[test]
+fn quick_fix_preserves_ampersands() {
+    let html = r#"<div hx-ws="connect:/a?x=1&amp;y=2">x</div>"#;
+    let fixed = run_quick_fix(html).expect("expected quick fix");
+    assert_eq!(
+        fixed,
+        r#"<div hx-ext="ws" ws-connect="/a?x=1&amp;y=2">x</div>"#
+    );
+}
+
+#[test]
+fn quick_fix_rewrites_unquoted_hx_ext() {
+    let html = r#"<div hx-ext=json-enc hx-ws="connect:/c">x</div>"#;
+    let fixed = run_quick_fix(html).expect("expected quick fix");
+    assert_eq!(
+        fixed,
+        r#"<div hx-ext="json-enc, ws" ws-connect="/c">x</div>"#
+    );
+}
+
+#[test]
+fn quick_fix_send_only_keeps_hx_ext() {
+    let html = r#"<div hx-ext="json-enc" hx-ws="send">x</div>"#;
+    let fixed = run_quick_fix(html).expect("expected quick fix");
+    assert_eq!(fixed, r#"<div hx-ext="json-enc" ws-send>x</div>"#);
+}
+
+#[test]
+fn quick_fix_skips_dynamic_values() {
+    let html1 = r#"<div hx-ext="{{ e }}" hx-ws="connect:/c">"#;
+    assert_eq!(run_quick_fix(html1), None);
+
+    let html2 = r#"<div hx-ws="connect:{{ u }}">"#;
+    assert_eq!(run_quick_fix(html2), None);
+}
+
+#[test]
+fn quick_fix_handles_data_prefix() {
+    let html = r#"<div data-hx-ext="a" data-hx-ws="connect:/c">x</div>"#;
+    let fixed = run_quick_fix(html).expect("expected quick fix");
+    assert_eq!(fixed, r#"<div data-hx-ext="a, ws" ws-connect="/c">x</div>"#);
+}
+
+#[test]
+fn quick_fix_with_crlf_line_endings() {
+    let html = "<p>\r\n<div hx-sse=\"connect:/e swap:m\">x</div>";
+    let fixed = run_quick_fix(html).expect("expected quick fix");
+    assert_eq!(
+        fixed,
+        "<p>\r\n<div hx-ext=\"sse\" sse-connect=\"/e\" sse-swap=\"m\">x</div>"
+    );
+}
+
+#[test]
+fn quick_fix_empty_hx_ext_becomes_ws() {
+    let html = r#"<div hx-ext="" hx-ws="connect:/c">x</div>"#;
+    let fixed = run_quick_fix(html).expect("expected quick fix");
+    assert_eq!(fixed, r#"<div hx-ext="ws" ws-connect="/c">x</div>"#);
+}
+
+#[test]
+fn quick_fix_bare_attribute() {
+    let html = r#"<div hx-ws>x</div>"#;
+    let fixed = run_quick_fix(html).expect("expected quick fix");
+    assert_eq!(fixed, r#"<div hx-ext="ws">x</div>"#);
+}
