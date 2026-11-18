@@ -397,3 +397,61 @@ fn target_completion_capped() {
     assert!(list.is_incomplete);
     assert_eq!(list.items[0].label, "#id-000");
 }
+
+#[test]
+fn uppercase_attribute_validated() {
+    let service = HtmxLanguageService::new();
+    let doc = Document::new(
+        Uri::from_str("file:///test.html").unwrap(),
+        1,
+        "<b HX-SWAP=\"bogus\">x</b>",
+    );
+    let diags = service.validate(&doc);
+    assert_eq!(diags.len(), 1);
+    assert_eq!(
+        diags[0].code,
+        Some(lsp_types::NumberOrString::String("HTMX002".to_string()))
+    );
+}
+
+#[test]
+fn swap_timing_validated() {
+    let service = HtmxLanguageService::new();
+    let doc = Document::new(
+        Uri::from_str("file:///test.html").unwrap(),
+        1,
+        "<b hx-swap=\"innerHTML swap:abc settle:1s\">",
+    );
+    let diags = service.validate(&doc);
+    assert_eq!(diags.len(), 1);
+    assert_eq!(
+        diags[0].code,
+        Some(lsp_types::NumberOrString::String("HTMX002".to_string()))
+    );
+    assert!(diags[0].message.contains("'abc'"));
+}
+
+#[test]
+fn polling_interval_validated() {
+    let service = HtmxLanguageService::new();
+    let doc_bad = Document::new(
+        Uri::from_str("file:///test.html").unwrap(),
+        1,
+        "<b hx-trigger=\"every abc\">",
+    );
+    let diags_bad = service.validate(&doc_bad);
+    assert_eq!(diags_bad.len(), 1);
+    assert_eq!(
+        diags_bad[0].code,
+        Some(lsp_types::NumberOrString::String("HTMX003".to_string()))
+    );
+    assert!(diags_bad[0].message.contains("'abc'"));
+
+    let doc_ok = Document::new(
+        Uri::from_str("file:///test.html").unwrap(),
+        1,
+        "<b hx-trigger=\"every 2s\">",
+    );
+    let diags_ok = service.validate(&doc_ok);
+    assert_eq!(diags_ok.len(), 0);
+}

@@ -1,4 +1,4 @@
-use htmx_schema::HtmxAttributeDefinition;
+use htmx_schema::canonical_name;
 use htmx_vfs::Document;
 use lsp_types::{
     CodeAction, CodeActionKind, CodeActionOrCommand, Diagnostic, NumberOrString, Range, TextEdit,
@@ -40,7 +40,7 @@ impl CodeActionProvider {
         }
 
         let attr_name = &text[start_offset..end_offset];
-        let norm_name = HtmxAttributeDefinition::normalize_name(attr_name);
+        let norm_name = canonical_name(attr_name);
 
         if norm_name != "hx-ws" && norm_name != "hx-sse" {
             return None;

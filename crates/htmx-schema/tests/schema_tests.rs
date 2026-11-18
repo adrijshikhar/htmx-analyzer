@@ -110,3 +110,15 @@ fn test_extensions_registry() {
     assert!(get_extension("idiomorph").is_some());
     assert_eq!(get_extension("nonexistent"), None);
 }
+
+#[test]
+fn canonical_name_lowercases_and_strips_data() {
+    assert_eq!(canonical_name("HX-Get"), "hx-get");
+    assert_eq!(canonical_name("DATA-HX-SWAP"), "hx-swap");
+    assert_eq!(canonical_name("data-data-x"), "data-x");
+}
+
+#[test]
+fn attribute_lookup_case_insensitive() {
+    assert_eq!(attribute("HX-SWAP").unwrap().name, "hx-swap");
+}

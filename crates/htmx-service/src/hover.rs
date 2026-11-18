@@ -22,11 +22,11 @@ impl HoverProvider {
 
     fn hover_attribute_name(attr_name: &str) -> Option<Hover> {
         let attr = get_attribute(attr_name)?;
-        let normalized = HtmxAttributeDefinition::normalize_name(attr_name);
+        let canon = canonical_name(attr_name);
 
         let mut markdown = format!("### `{}`\n\n**{}**\n\n", attr.name, attr.summary);
 
-        if normalized == attr.name {
+        if canon == attr.name {
             if let Some(dep) = attr.deprecated {
                 markdown.push_str(&format!("> ⚠️ **Deprecated in HTMX 2.0**\n> {}\n\n", dep));
             }
@@ -48,12 +48,12 @@ impl HoverProvider {
     }
 
     fn hover_attribute_value(attr_name: &str, value: &str, cursor_offset: usize) -> Option<Hover> {
-        let norm_name = HtmxAttributeDefinition::normalize_name(attr_name);
+        let norm_name = canonical_name(attr_name);
 
         // Find token under cursor inside the value
         let token = Self::token_under_cursor(value, cursor_offset)?;
 
-        let markdown = match norm_name {
+        let markdown = match norm_name.as_str() {
             "hx-swap" => {
                 if let Some(mod_def) = SWAP_MODIFIERS.iter().find(|m| {
                     token == m.name

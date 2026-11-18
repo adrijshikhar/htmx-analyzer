@@ -126,7 +126,7 @@ impl CompletionProvider {
         cursor_offset: usize,
         source: &str,
     ) -> CompletionList {
-        let norm_name = HtmxAttributeDefinition::normalize_name(attr_name);
+        let norm_name = canonical_name(attr_name);
         let prefix_so_far = if cursor_offset <= value.len() {
             &value[..cursor_offset]
         } else {
@@ -141,7 +141,7 @@ impl CompletionProvider {
 
         let mut items = Vec::new();
 
-        match norm_name {
+        match norm_name.as_str() {
             "hx-swap" => {
                 // If cursor is at the first token and no style is present yet
                 let words: Vec<&str> = value.split_whitespace().collect();
@@ -299,7 +299,7 @@ impl CompletionProvider {
                 }
             }
             _ => {
-                if let Some(attr) = get_attribute(norm_name) {
+                if let Some(attr) = get_attribute(&norm_name) {
                     for val in attr.allowed_values {
                         if last_token.is_empty() || val.starts_with(last_token) {
                             items.push(CompletionItem {
