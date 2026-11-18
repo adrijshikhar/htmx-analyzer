@@ -78,9 +78,9 @@ impl Server {
 
         let server_capabilities = serde_json::to_value(&capabilities)?;
         let init_params_val = self.connection.initialize(server_capabilities)?;
-        let init_params: lsp_types::InitializeParams = serde_json::from_value(init_params_val)?;
-        let init_options = init_params
-            .initialization_options
+        let init_options = init_params_val
+            .get("initializationOptions")
+            .cloned()
             .unwrap_or(serde_json::Value::Null);
         let config = Config::from_json(&init_options);
         self.service.set_config(config);
