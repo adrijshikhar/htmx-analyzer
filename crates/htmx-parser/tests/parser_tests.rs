@@ -253,3 +253,27 @@ fn test_html_document_id_extraction() {
     assert!(ids.contains("result"));
     assert_eq!(ids.len(), 4);
 }
+
+#[test]
+fn cursor_in_brace_value_is_none() {
+    let html = "<div hx-swap={s}>";
+    let offset = html.find("{s").unwrap() + 2;
+    let ctx = CursorScanner::scan(html, offset);
+    assert_eq!(ctx.position_kind, CursorPositionKind::None);
+}
+
+#[test]
+fn cursor_in_templ_tag_finds_attribute() {
+    let sample = "package v\ntempl Row(i Item) {\n\t<div id={ i.ID } hx-get={ \"/i/\" + i.ID } hx-swap=\"bogus\" hx-target=\"this\">{ i.Name }</div>\n}";
+    let offset = sample.find("hx-target").unwrap() + 2;
+    let ctx = CursorScanner::scan(sample, offset);
+    match ctx.position_kind {
+        CursorPositionKind::AttributeName { prefix, .. } => {
+            assert_eq!(prefix, "hx-target");
+        }
+        _ => panic!(
+            "Expected AttributeName for hx-target in templ tag, got {:?}",
+            ctx.position_kind
+        ),
+    }
+}
