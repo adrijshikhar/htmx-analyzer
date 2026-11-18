@@ -135,3 +135,16 @@ fn test_document_store() {
     store.close(&uri);
     assert!(store.is_empty());
 }
+
+#[test]
+fn document_store_lists_uris() {
+    let mut store = DocumentStore::new();
+    let uri1 = Uri::from_str("file:///test1.html").unwrap();
+    let uri2 = Uri::from_str("file:///test2.html").unwrap();
+    store.open(uri1.clone(), 1, "test1");
+    store.open(uri2.clone(), 1, "test2");
+    let uris: Vec<&Uri> = store.uris().collect();
+    assert_eq!(uris.len(), 2);
+    assert!(uris.contains(&&uri1));
+    assert!(uris.contains(&&uri2));
+}

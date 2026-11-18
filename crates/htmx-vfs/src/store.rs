@@ -56,4 +56,9 @@ impl DocumentStore {
     pub fn is_empty(&self) -> bool {
         self.documents.is_empty()
     }
+
+    /// Iterate over open document URIs.
+    pub fn uris(&self) -> impl Iterator<Item = &Uri> {
+        self.documents.keys()
+    }
 }
