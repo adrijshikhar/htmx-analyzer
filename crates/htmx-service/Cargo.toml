@@ -2,9 +2,11 @@
 name = "htmx-service"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
+publish = false
 description = "Decoupled language intelligence service for HTMX 2.0"
 
 [dependencies]

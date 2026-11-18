@@ -2,9 +2,11 @@
 name = "htmx-analyzer"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
+publish = false
 description = "HTMX 2.0 Language Server binary"
 
 [[bin]]
