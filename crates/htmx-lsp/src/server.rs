@@ -88,6 +88,9 @@ impl Server {
         info!("htmx-analyzer initialized successfully. Listening on stdio.");
 
         let (pump_tx, pump_rx) = crossbeam_channel::unbounded();
+        while let Ok(msg) = self.connection.receiver.try_recv() {
+            let _ = pump_tx.send(msg);
+        }
         let conn_rx = self.connection.receiver.clone();
         std::thread::spawn(move || {
             while let Ok(msg) = conn_rx.recv() {
@@ -103,10 +106,13 @@ impl Server {
             std::collections::HashSet::new();
 
         while let Ok(first) = pump_rx.recv() {
-            let mut batch = vec![first];
-            batch.extend(pump_rx.try_iter());
+            let mut batch = std::collections::VecDeque::new();
+            batch.push_back(first);
+            while let Ok(msg) = pump_rx.try_recv() {
+                batch.push_back(msg);
+            }
 
-            for msg in batch {
+            while let Some(msg) = batch.pop_front() {
                 match msg {
                     Message::Request(req) => {
                         if req.method == "shutdown" {
@@ -299,6 +305,10 @@ impl Server {
                     Message::Response(_resp) => {
                         trace!("Received unhandled response");
                     }
+                }
+
+                while let Ok(more) = pump_rx.try_recv() {
+                    batch.push_back(more);
                 }
             }
 
