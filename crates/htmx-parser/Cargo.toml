@@ -9,6 +9,4 @@ description = "Tree-Sitter HTML parsing and micro-syntax parsers for HTMX 2.0"
 
 [dependencies]
 htmx-schema = { workspace = true }
-tree-sitter = { workspace = true }
-tree-sitter-html = { workspace = true }
 serde = { workspace = true }

@@ -245,10 +245,11 @@ fn test_html_document_id_extraction() {
         </html>
     "#;
 
-    let doc = HtmlDocument::parse(html);
-    assert!(doc.document_ids.contains("main-header"));
-    assert!(doc.document_ids.contains("content"));
-    assert!(doc.document_ids.contains("submit-btn"));
-    assert!(doc.document_ids.contains("result"));
-    assert_eq!(doc.document_ids.len(), 4);
+    let tags = lex(html);
+    let ids = document_ids(&tags);
+    assert!(ids.contains("main-header"));
+    assert!(ids.contains("content"));
+    assert!(ids.contains("submit-btn"));
+    assert!(ids.contains("result"));
+    assert_eq!(ids.len(), 4);
 }
