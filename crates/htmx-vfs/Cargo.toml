@@ -12,3 +12,6 @@ description = "Virtual File System and rope-based text document management"
 [dependencies]
 ropey = { workspace = true }
 lsp-types = { workspace = true }
+
+[dev-dependencies]
+proptest = "1.6"

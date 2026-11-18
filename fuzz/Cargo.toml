@@ -1,0 +1,26 @@
+[package]
+name = "htmx-analyzer-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[workspace]
+
+[dependencies]
+libfuzzer-sys = "0.4"
+htmx-parser = { path = "../crates/htmx-parser" }
+
+[[bin]]
+name = "lexer"
+path = "fuzz_targets/lexer.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "cursor_scan"
+path = "fuzz_targets/cursor_scan.rs"
+test = false
+doc = false
