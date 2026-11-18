@@ -3,7 +3,7 @@ use htmx_vfs::DocumentStore;
 use lsp_types::{
     CodeActionParams, CodeActionResponse, CompletionParams, CompletionResponse,
     DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams, Hover,
-    HoverParams, PublishDiagnosticsParams,
+    HoverParams,
 };
 use tracing::{debug, info};
 
@@ -52,64 +52,22 @@ pub fn handle_code_action(
     Some(actions)
 }
 
-pub fn handle_did_open(
-    service: &HtmxLanguageService,
-    doc_store: &mut DocumentStore,
-    params: DidOpenTextDocumentParams,
-) -> PublishDiagnosticsParams {
+pub fn handle_did_open(doc_store: &mut DocumentStore, params: DidOpenTextDocumentParams) {
     let item = params.text_document;
     info!("Opened document: {:?}", item.uri);
-
-    doc_store.open(item.uri.clone(), item.version, &item.text);
-
-    let diagnostics = if let Some(doc) = doc_store.get(&item.uri) {
-        service.validate(doc)
-    } else {
-        Vec::new()
-    };
-
-    PublishDiagnosticsParams {
-        uri: item.uri,
-        diagnostics,
-        version: Some(item.version),
-    }
+    doc_store.open(item.uri, item.version, &item.text);
 }
 
-pub fn handle_did_change(
-    service: &HtmxLanguageService,
-    doc_store: &mut DocumentStore,
-    params: DidChangeTextDocumentParams,
-) -> Option<PublishDiagnosticsParams> {
+pub fn handle_did_change(doc_store: &mut DocumentStore, params: DidChangeTextDocumentParams) {
     let uri = params.text_document.uri;
     let version = params.text_document.version;
 
     debug!("Changed document: {:?} (version {})", uri, version);
-
     doc_store.change(&uri, version, params.content_changes);
-
-    let doc = doc_store.get(&uri)?;
-    let diagnostics = service.validate(doc);
-
-    Some(PublishDiagnosticsParams {
-        uri,
-        diagnostics,
-        version: Some(version),
-    })
 }
 
-pub fn handle_did_close(
-    doc_store: &mut DocumentStore,
-    params: DidCloseTextDocumentParams,
-) -> PublishDiagnosticsParams {
+pub fn handle_did_close(doc_store: &mut DocumentStore, params: DidCloseTextDocumentParams) {
     let uri = params.text_document.uri;
     info!("Closed document: {:?}", uri);
-
     doc_store.close(&uri);
-
-    // Clear diagnostics on close
-    PublishDiagnosticsParams {
-        uri,
-        diagnostics: Vec::new(),
-        version: None,
-    }
 }
