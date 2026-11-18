@@ -603,14 +603,14 @@ Syntax: `<selector>:<strategy>` where strategy is `drop`, `abort`, `replace`, or
     },
 ];
 
-/// Look up an attribute definition by name, supporting both `hx-*` and `data-hx-*`.
+/// Look up an attribute definition by name, supporting both `hx-*` and `data-hx-*`, case-insensitively.
 pub fn attribute(name: &str) -> Option<&'static HtmxAttributeDefinition> {
-    let normalized = HtmxAttributeDefinition::normalize_name(name);
+    let canonical = crate::attribute::canonical_name(name);
     // Also support hx-on:* prefix pattern
-    if normalized.starts_with("hx-on:") {
+    if canonical.starts_with("hx-on:") {
         return ATTRIBUTES.iter().find(|attr| attr.name == "hx-on");
     }
-    ATTRIBUTES.iter().find(|attr| attr.name == normalized)
+    ATTRIBUTES.iter().find(|attr| attr.name == canonical)
 }
 
 /// Alias for [`attribute`] adhering to legacy `get_` convention.

@@ -2,7 +2,7 @@ use htmx_parser::{
     document_ids, lex, HxSwapParser, HxTarget, HxTargetParser, HxTriggerParser, SwapModifier,
     TriggerModifier, MAX_FILE_SIZE,
 };
-use htmx_schema::{get_attribute, HtmxAttributeDefinition};
+use htmx_schema::{canonical_name, get_attribute};
 use htmx_vfs::Document;
 use lsp_types::{Diagnostic, DiagnosticSeverity, NumberOrString, Range};
 
@@ -21,10 +21,11 @@ impl DiagnosticEngine {
 
         for tag in &tags {
             for attr in &tag.attributes {
+                let canon_name = canonical_name(attr.name);
+
                 // HTMX001: Deprecated attributes check
                 if let Some(attr_def) = get_attribute(attr.name) {
-                    let normalized = HtmxAttributeDefinition::normalize_name(attr.name);
-                    if normalized == attr_def.name {
+                    if canon_name == attr_def.name {
                         if let Some(dep_msg) = attr_def.deprecated {
                             if let (Some(start_pos), Some(end_pos)) = (
                                 doc.offset_to_position(attr.name_range.start),
@@ -56,9 +57,7 @@ impl DiagnosticEngine {
                     continue;
                 }
 
-                let norm_name = HtmxAttributeDefinition::normalize_name(attr.name);
-
-                match norm_name {
+                match canon_name.as_str() {
                     // HTMX002: Invalid swap styles
                     "hx-swap" => {
                         let spec = HxSwapParser::parse(val.text);
@@ -84,20 +83,45 @@ impl DiagnosticEngine {
                         }
 
                         for modifier in spec.modifiers {
-                            if let SwapModifier::Unknown(u) = modifier {
-                                if let (Some(s), Some(e)) = (
-                                    doc.offset_to_position(val.range.start),
-                                    doc.offset_to_position(val.range.end),
-                                ) {
-                                    diagnostics.push(Diagnostic {
-                                        range: Range { start: s, end: e },
-                                        severity: Some(DiagnosticSeverity::WARNING),
-                                        code: Some(NumberOrString::String("HTMX002".to_string())),
-                                        source: Some("htmx-analyzer".to_string()),
-                                        message: format!("Unknown swap modifier '{}'.", u),
-                                        ..Default::default()
-                                    });
+                            match modifier {
+                                SwapModifier::Swap(d) | SwapModifier::Settle(d)
+                                    if !HxTriggerParser::is_valid_duration(&d) =>
+                                {
+                                    if let (Some(s), Some(e)) = (
+                                        doc.offset_to_position(val.range.start),
+                                        doc.offset_to_position(val.range.end),
+                                    ) {
+                                        diagnostics.push(Diagnostic {
+                                            range: Range { start: s, end: e },
+                                            severity: Some(DiagnosticSeverity::ERROR),
+                                            code: Some(NumberOrString::String("HTMX002".to_string())),
+                                            source: Some("htmx-analyzer".to_string()),
+                                            message: format!(
+                                                "Invalid swap timing '{}'. Expected format like '500ms' or '1s'.",
+                                                d
+                                            ),
+                                            ..Default::default()
+                                        });
+                                    }
                                 }
+                                SwapModifier::Unknown(u) => {
+                                    if let (Some(s), Some(e)) = (
+                                        doc.offset_to_position(val.range.start),
+                                        doc.offset_to_position(val.range.end),
+                                    ) {
+                                        diagnostics.push(Diagnostic {
+                                            range: Range { start: s, end: e },
+                                            severity: Some(DiagnosticSeverity::WARNING),
+                                            code: Some(NumberOrString::String(
+                                                "HTMX002".to_string(),
+                                            )),
+                                            source: Some("htmx-analyzer".to_string()),
+                                            message: format!("Unknown swap modifier '{}'.", u),
+                                            ..Default::default()
+                                        });
+                                    }
+                                }
+                                _ => {}
                             }
                         }
                     }
@@ -145,6 +169,28 @@ impl DiagnosticEngine {
                                                 source: Some("htmx-analyzer".to_string()),
                                                 message: format!(
                                                     "Invalid throttle duration '{}'. Expected format like '500ms' or '1s'.",
+                                                    d
+                                                ),
+                                                ..Default::default()
+                                            });
+                                        }
+                                    }
+                                    TriggerModifier::Every(d)
+                                        if !HxTriggerParser::is_valid_duration(&d) =>
+                                    {
+                                        if let (Some(s), Some(e)) = (
+                                            doc.offset_to_position(val.range.start),
+                                            doc.offset_to_position(val.range.end),
+                                        ) {
+                                            diagnostics.push(Diagnostic {
+                                                range: Range { start: s, end: e },
+                                                severity: Some(DiagnosticSeverity::ERROR),
+                                                code: Some(NumberOrString::String(
+                                                    "HTMX003".to_string(),
+                                                )),
+                                                source: Some("htmx-analyzer".to_string()),
+                                                message: format!(
+                                                    "Invalid polling interval '{}'. Expected format like '2s'.",
                                                     d
                                                 ),
                                                 ..Default::default()

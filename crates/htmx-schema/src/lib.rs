@@ -6,7 +6,8 @@ pub mod extensions;
 pub mod registry;
 
 pub use attribute::{
-    AttributeCategory, AttributeValueType, HtmxAttributeDefinition, ModifierDefinition,
+    canonical_name, AttributeCategory, AttributeValueType, HtmxAttributeDefinition,
+    ModifierDefinition,
 };
 pub use extensions::{all_extensions, extension, get_extension, ExtensionDefinition, EXTENSIONS};
 pub use registry::{

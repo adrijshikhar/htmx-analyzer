@@ -61,19 +61,12 @@ pub struct HtmxAttributeDefinition {
     pub documentation_url: &'static str,
 }
 
-impl HtmxAttributeDefinition {
-    /// Strip optional `data-` prefix to normalize `data-hx-*` to `hx-*`.
-    pub fn normalize_name(name: &str) -> &str {
-        if let Some(stripped) = name.strip_prefix("data-") {
-            stripped
-        } else {
-            name
-        }
-    }
-
-    /// Check if this definition matches the given attribute name (`hx-*` or `data-hx-*`).
-    pub fn matches(&self, name: &str) -> bool {
-        let norm = Self::normalize_name(name);
-        self.name == norm
+/// Canonicalize an attribute name by lowercasing (ASCII) and stripping one leading `data-` prefix.
+pub fn canonical_name(name: &str) -> String {
+    let lower = name.to_ascii_lowercase();
+    if let Some(stripped) = lower.strip_prefix("data-") {
+        stripped.to_string()
+    } else {
+        lower
     }
 }
