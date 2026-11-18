@@ -7,12 +7,13 @@ pub mod diagnostics;
 pub mod hover;
 
 pub use code_action::CodeActionProvider;
-pub use completion::CompletionProvider;
+pub use completion::{CompletionProvider, MAX_ID_COMPLETIONS};
 pub use diagnostics::DiagnosticEngine;
 pub use hover::HoverProvider;
 
+use htmx_parser::MAX_FILE_SIZE;
 use htmx_vfs::Document;
-use lsp_types::{CodeActionOrCommand, CompletionItem, Diagnostic, Hover, Position, Range};
+use lsp_types::{CodeActionOrCommand, CompletionList, Diagnostic, Hover, Position, Range};
 
 /// Pure, decoupled HTMX Language Service implementing LSP language features.
 #[derive(Debug, Default, Clone)]
@@ -24,16 +25,25 @@ impl HtmxLanguageService {
     }
 
     /// Provide autocompletion items at the given document position.
-    pub fn complete(&self, doc: &Document, position: Position) -> Vec<CompletionItem> {
-        let offset = doc.position_to_offset(position).unwrap_or(0);
+    pub fn complete(&self, doc: &Document, position: Position) -> CompletionList {
         let text = doc.text();
+        if text.len() > MAX_FILE_SIZE {
+            return CompletionList {
+                is_incomplete: false,
+                items: Vec::new(),
+            };
+        }
+        let offset = doc.position_to_offset(position).unwrap_or(0);
         CompletionProvider::complete(&text, offset)
     }
 
     /// Provide hover documentation at the given document position.
     pub fn hover(&self, doc: &Document, position: Position) -> Option<Hover> {
-        let offset = doc.position_to_offset(position)?;
         let text = doc.text();
+        if text.len() > MAX_FILE_SIZE {
+            return None;
+        }
+        let offset = doc.position_to_offset(position)?;
         HoverProvider::hover(&text, offset)
     }
 
@@ -49,6 +59,10 @@ impl HtmxLanguageService {
         range: Range,
         diagnostics: &[Diagnostic],
     ) -> Vec<CodeActionOrCommand> {
+        let text = doc.text();
+        if text.len() > MAX_FILE_SIZE {
+            return Vec::new();
+        }
         CodeActionProvider::code_actions(doc, range, diagnostics)
     }
 }

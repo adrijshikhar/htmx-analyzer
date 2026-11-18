@@ -10,13 +10,15 @@ fn test_attribute_completion() {
     let html = r#"<button hx- >Click</button>"#;
     // Cursor right after "hx-" at character 11
     let doc = Document::new(uri, 1, html);
-    let items = service.complete(
-        &doc,
-        Position {
-            line: 0,
-            character: 11,
-        },
-    );
+    let items = service
+        .complete(
+            &doc,
+            Position {
+                line: 0,
+                character: 11,
+            },
+        )
+        .items;
 
     assert!(!items.is_empty());
     let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
@@ -33,13 +35,15 @@ fn test_swap_style_completion() {
     let html = r#"<button hx-swap="">Click</button>"#;
     // Cursor between quotes at character 17
     let doc = Document::new(uri, 1, html);
-    let items = service.complete(
-        &doc,
-        Position {
-            line: 0,
-            character: 17,
-        },
-    );
+    let items = service
+        .complete(
+            &doc,
+            Position {
+                line: 0,
+                character: 17,
+            },
+        )
+        .items;
 
     let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
     assert!(labels.contains(&"innerHTML"));
@@ -59,7 +63,7 @@ fn test_target_completion_with_document_ids() {
     let doc = Document::new(uri, 1, html);
     let target_offset = html.find("hx-target=\"\"").unwrap() + 11;
     let pos = doc.offset_to_position(target_offset).unwrap();
-    let items = service.complete(&doc, pos);
+    let items = service.complete(&doc, pos).items;
 
     let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
     assert!(labels.contains(&"#target-container"));
@@ -276,13 +280,15 @@ fn test_hx_on_completion() {
     let uri = Uri::from_str("file:///test.html").unwrap();
     let html = r#"<button hx-on:c >Click</button>"#;
     let doc = Document::new(uri, 1, html);
-    let items = service.complete(
-        &doc,
-        Position {
-            line: 0,
-            character: 15,
-        },
-    );
+    let items = service
+        .complete(
+            &doc,
+            Position {
+                line: 0,
+                character: 15,
+            },
+        )
+        .items;
     let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
     assert!(labels.contains(&"hx-on:click"));
     assert!(labels.contains(&"hx-on:change"));
@@ -357,4 +363,37 @@ fn test_unknown_hx_ws_value_returns_no_quick_fix() {
         actions.is_empty(),
         "Unrecognized hx-ws value should not produce quick fix"
     );
+}
+
+#[test]
+fn hover_inside_templ_tag() {
+    let service = HtmxLanguageService::new();
+    let sample = "package v\ntempl Row(i Item) {\n\t<div id={ i.ID } hx-get={ \"/i/\" + i.ID } hx-swap=\"bogus\" hx-target=\"this\">{ i.Name }</div>\n}";
+    let doc = Document::new(Uri::from_str("file:///test.html").unwrap(), 1, sample);
+    let offset = sample.find("hx-target").unwrap() + 2;
+    let pos = doc.offset_to_position(offset).unwrap();
+    let hover = service.hover(&doc, pos).expect("Hover should exist");
+    match hover.contents {
+        lsp_types::HoverContents::Markup(m) => {
+            assert!(m.value.contains("hx-target"));
+        }
+        _ => panic!("Expected Markup hover contents"),
+    }
+}
+
+#[test]
+fn target_completion_capped() {
+    let service = HtmxLanguageService::new();
+    let mut html = String::new();
+    for i in 0..500 {
+        html.push_str(&format!("<span id=\"id-{:03}\"></span>", i));
+    }
+    html.push_str("<b hx-target=\"#\">");
+    let doc = Document::new(Uri::from_str("file:///test.html").unwrap(), 1, &html);
+    let offset = html.rfind('#').unwrap() + 1;
+    let pos = doc.offset_to_position(offset).unwrap();
+    let list = service.complete(&doc, pos);
+    assert_eq!(list.items.len(), 200);
+    assert!(list.is_incomplete);
+    assert_eq!(list.items[0].label, "#id-000");
 }

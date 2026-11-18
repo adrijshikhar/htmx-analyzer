@@ -18,8 +18,8 @@ pub fn handle_completion(
     debug!("Handling completion request for {:?} at {:?}", uri, pos);
 
     let doc = doc_store.get(&uri)?;
-    let items = service.complete(doc, pos);
-    Some(CompletionResponse::Array(items))
+    let list = service.complete(doc, pos);
+    Some(CompletionResponse::List(list))
 }
 
 pub fn handle_hover(

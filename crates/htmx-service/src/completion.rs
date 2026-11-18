@@ -1,22 +1,27 @@
 use htmx_parser::{document_ids, lex, CursorPositionKind, CursorScanner};
 use htmx_schema::*;
 use lsp_types::{
-    CompletionItem, CompletionItemKind, Documentation, InsertTextFormat, MarkupContent, MarkupKind,
+    CompletionItem, CompletionItemKind, CompletionList, Documentation, InsertTextFormat,
+    MarkupContent, MarkupKind,
 };
+
+pub const MAX_ID_COMPLETIONS: usize = 200;
 
 pub struct CompletionProvider;
 
 impl CompletionProvider {
-    pub fn complete(source: &str, offset: usize) -> Vec<CompletionItem> {
+    pub fn complete(source: &str, offset: usize) -> CompletionList {
         let ctx = CursorScanner::scan(source, offset);
 
         match ctx.position_kind {
-            CursorPositionKind::AttributeName { prefix, .. } => {
-                Self::complete_attribute_names(&prefix, &ctx.existing_attributes)
-            }
-            CursorPositionKind::TagBody => {
-                Self::complete_attribute_names("", &ctx.existing_attributes)
-            }
+            CursorPositionKind::AttributeName { prefix, .. } => CompletionList {
+                is_incomplete: false,
+                items: Self::complete_attribute_names(&prefix, &ctx.existing_attributes),
+            },
+            CursorPositionKind::TagBody => CompletionList {
+                is_incomplete: false,
+                items: Self::complete_attribute_names("", &ctx.existing_attributes),
+            },
             CursorPositionKind::AttributeValue {
                 attribute_name,
                 value,
@@ -28,7 +33,10 @@ impl CompletionProvider {
                 cursor_offset_in_value,
                 source,
             ),
-            CursorPositionKind::None => Vec::new(),
+            CursorPositionKind::None => CompletionList {
+                is_incomplete: false,
+                items: Vec::new(),
+            },
         }
     }
 
@@ -117,7 +125,7 @@ impl CompletionProvider {
         value: &str,
         cursor_offset: usize,
         source: &str,
-    ) -> Vec<CompletionItem> {
+    ) -> CompletionList {
         let norm_name = HtmxAttributeDefinition::normalize_name(attr_name);
         let prefix_so_far = if cursor_offset <= value.len() {
             &value[..cursor_offset]
@@ -244,21 +252,35 @@ impl CompletionProvider {
 
                 // Document IDs extracted with the linear lexer
                 let tags = lex(source);
-                for id in document_ids(&tags) {
+                let mut ids: Vec<&str> = document_ids(&tags).into_iter().collect();
+                ids.sort_unstable();
+
+                let mut matching_ids = Vec::new();
+                for id in ids {
                     let label = format!("#{}", id);
                     if last_token.is_empty()
                         || label.starts_with(last_token)
                         || id.starts_with(last_token)
                     {
-                        items.push(CompletionItem {
-                            label: label.clone(),
-                            kind: Some(CompletionItemKind::REFERENCE),
-                            detail: Some(format!("Document ID: {}", id)),
-                            insert_text: Some(label),
-                            ..Default::default()
-                        });
+                        matching_ids.push((id, label));
                     }
                 }
+
+                let is_incomplete = matching_ids.len() > MAX_ID_COMPLETIONS;
+                for (id, label) in matching_ids.into_iter().take(MAX_ID_COMPLETIONS) {
+                    items.push(CompletionItem {
+                        label: label.clone(),
+                        kind: Some(CompletionItemKind::REFERENCE),
+                        detail: Some(format!("Document ID: {}", id)),
+                        insert_text: Some(label),
+                        ..Default::default()
+                    });
+                }
+
+                return CompletionList {
+                    is_incomplete,
+                    items,
+                };
             }
             "hx-ext" => {
                 for ext in all_extensions() {
@@ -291,6 +313,9 @@ impl CompletionProvider {
             }
         }
 
-        items
+        CompletionList {
+            is_incomplete: false,
+            items,
+        }
     }
 }
