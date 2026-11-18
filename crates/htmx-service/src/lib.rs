@@ -3,11 +3,13 @@
 
 pub mod code_action;
 pub mod completion;
+pub mod config;
 pub mod diagnostics;
 pub mod hover;
 
 pub use code_action::CodeActionProvider;
 pub use completion::{CompletionProvider, MAX_ID_COMPLETIONS};
+pub use config::{Config, SeverityLevel};
 pub use diagnostics::DiagnosticEngine;
 pub use hover::HoverProvider;
 
@@ -17,11 +19,27 @@ use lsp_types::{CodeActionOrCommand, CompletionList, Diagnostic, Hover, Position
 
 /// Pure, decoupled HTMX Language Service implementing LSP language features.
 #[derive(Debug, Default, Clone)]
-pub struct HtmxLanguageService;
+pub struct HtmxLanguageService {
+    config: Config,
+}
 
 impl HtmxLanguageService {
     pub fn new() -> Self {
-        Self
+        Self {
+            config: Config::default(),
+        }
+    }
+
+    pub fn with_config(config: Config) -> Self {
+        Self { config }
+    }
+
+    pub fn set_config(&mut self, config: Config) {
+        self.config = config;
+    }
+
+    pub fn config(&self) -> &Config {
+        &self.config
     }
 
     /// Provide autocompletion items at the given document position.
@@ -49,7 +67,7 @@ impl HtmxLanguageService {
 
     /// Run static analysis and return diagnostics for the document.
     pub fn validate(&self, doc: &Document) -> Vec<Diagnostic> {
-        DiagnosticEngine::validate(doc)
+        DiagnosticEngine::validate(doc, &self.config)
     }
 
     /// Provide quick-fix code actions for diagnostics in a range.
