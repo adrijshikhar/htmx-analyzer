@@ -6,8 +6,10 @@ rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-publish = false
 description = "Decoupled language intelligence service for HTMX 2.0"
+homepage = "https://github.com/adrijshikhar/htmx-analyzer"
+keywords = ["htmx", "htmx2", "lsp", "language-server", "html"]
+categories = ["development-tools"]
 
 [dependencies]
 htmx-schema = { workspace = true }
