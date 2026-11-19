@@ -40,21 +40,9 @@ fn bench_validate(c: &mut Criterion) {
     let doc_10k = Document::new(uri_10k, 1, &doc_10k_text);
 
     let mut group = c.benchmark_group("validation");
-
     group.throughput(Throughput::Bytes(doc_10k_text.len() as u64));
     group.bench_function("validate_10k_lines", |b| {
         b.iter(|| black_box(service.validate(black_box(&doc_10k))))
-    });
-
-    let line3 = doc_10k_text.lines().nth(3).unwrap();
-    let col = line3.find("hx-target=\"#").unwrap() + "hx-target=\"#".len();
-    let target_pos = Position {
-        line: 3,
-        character: col as u32,
-    };
-
-    group.bench_function("complete_target_10k_lines", |b| {
-        b.iter(|| black_box(service.complete(black_box(&doc_10k), black_box(target_pos))))
     });
 
     let unit =
@@ -68,8 +56,19 @@ fn bench_validate(c: &mut Criterion) {
     group.bench_function("validate_4mib_single_line", |b| {
         b.iter(|| black_box(service.validate(black_box(&doc_4mib))))
     });
-
     group.finish();
+
+    let mut comp_group = c.benchmark_group("completion");
+    let line3 = doc_10k_text.lines().nth(3).unwrap();
+    let col = line3.find("hx-target=\"#").unwrap() + "hx-target=\"#".len();
+    let target_pos = Position {
+        line: 3,
+        character: col as u32,
+    };
+    comp_group.bench_function("complete_target_10k_lines", |b| {
+        b.iter(|| black_box(service.complete(black_box(&doc_10k), black_box(target_pos))))
+    });
+    comp_group.finish();
 }
 
 criterion_group!(benches, bench_validate);
