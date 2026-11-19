@@ -6,16 +6,21 @@ pub mod completion;
 pub mod config;
 pub mod diagnostics;
 pub mod hover;
+pub mod navigation;
 
 pub use code_action::CodeActionProvider;
 pub use completion::{CompletionProvider, MAX_ID_COMPLETIONS};
 pub use config::{Config, SeverityLevel};
 pub use diagnostics::DiagnosticEngine;
 pub use hover::HoverProvider;
+pub use navigation::{find_references, goto_definition, IdLocation, WorkspaceIdIndex};
 
 use htmx_parser::MAX_FILE_SIZE;
 use htmx_vfs::Document;
-use lsp_types::{CodeActionOrCommand, CompletionList, Diagnostic, Hover, Position, Range};
+use lsp_types::{
+    CodeActionOrCommand, CompletionList, Diagnostic, GotoDefinitionResponse, Hover, Location,
+    Position, Range, Uri,
+};
 
 /// Pure, decoupled HTMX Language Service implementing LSP language features.
 #[derive(Debug, Default, Clone)]
@@ -67,7 +72,49 @@ impl HtmxLanguageService {
 
     /// Run static analysis and return diagnostics for the document.
     pub fn validate(&self, doc: &Document) -> Vec<Diagnostic> {
-        DiagnosticEngine::validate(doc, &self.config)
+        self.validate_with_index(doc, None)
+    }
+
+    /// Run static analysis with cross-file workspace index resolution.
+    pub fn validate_with_index(
+        &self,
+        doc: &Document,
+        index: Option<&WorkspaceIdIndex>,
+    ) -> Vec<Diagnostic> {
+        DiagnosticEngine::validate_with_index(doc, &self.config, index)
+    }
+
+    /// Navigate to the definition of the ID under the cursor.
+    pub fn goto_definition(
+        &self,
+        uri: &Uri,
+        position: Position,
+        doc: &Document,
+        index: &WorkspaceIdIndex,
+        link_support: bool,
+    ) -> Option<GotoDefinitionResponse> {
+        let text = doc.text();
+        if text.len() > MAX_FILE_SIZE {
+            return None;
+        }
+        goto_definition(uri, position, doc, index, link_support)
+    }
+
+    /// Find all references to the ID under the cursor.
+    pub fn find_references(
+        &self,
+        uri: &Uri,
+        position: Position,
+        doc: &Document,
+        open_docs: &[&Document],
+        index: &WorkspaceIdIndex,
+        include_declaration: bool,
+    ) -> Vec<Location> {
+        let text = doc.text();
+        if text.len() > MAX_FILE_SIZE {
+            return Vec::new();
+        }
+        find_references(uri, position, doc, open_docs, index, include_declaration)
     }
 
     /// Provide quick-fix code actions for diagnostics in a range.
