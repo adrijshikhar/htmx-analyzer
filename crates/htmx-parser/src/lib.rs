@@ -8,7 +8,11 @@ pub mod target;
 pub mod trigger;
 
 pub use cursor_context::{CursorContext, CursorPositionKind, CursorScanner};
-pub use lexer::{document_ids, lex, AttrValue, Attribute, Quote, Tag, MAX_FILE_SIZE};
+pub use lexer::{
+    document_ids, find_id_definitions, find_id_reference_at, find_id_references,
+    is_id_referencing_attribute, lex, AttrValue, Attribute, IdDefinition, IdReference, Quote, Tag,
+    MAX_FILE_SIZE,
+};
 pub use swap::{HxSwapParser, ScrollDirection, SwapModifier, SwapSpecification};
 pub use target::{HxTarget, HxTargetParser};
 pub use trigger::{HxTriggerParser, TriggerModifier, TriggerSpecification};
