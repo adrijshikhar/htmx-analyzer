@@ -9,4 +9,5 @@ target/
 *.proptest-regressions
 __pycache__/
 *.py[cod]
-
+.superpowers/
+plans/
