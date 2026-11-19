@@ -7,3 +7,6 @@ target/
 .vscode/
 .openqodex/
 *.proptest-regressions
+__pycache__/
+*.py[cod]
+
