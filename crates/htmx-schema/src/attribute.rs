@@ -62,6 +62,7 @@ pub struct HtmxAttributeDefinition {
 }
 
 /// Canonicalize an attribute name by lowercasing (ASCII) and stripping one leading `data-` prefix.
+#[must_use]
 pub fn canonical_name(name: &str) -> String {
     let lower = name.to_ascii_lowercase();
     if let Some(stripped) = lower.strip_prefix("data-") {

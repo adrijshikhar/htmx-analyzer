@@ -19,6 +19,7 @@ pub struct AttrValue<'a> {
 }
 
 impl AttrValue<'_> {
+    #[must_use]
     pub fn is_dynamic(&self) -> bool {
         self.quote == Quote::Brace
             || self.text.contains('{')
@@ -44,6 +45,7 @@ pub struct Tag<'a> {
     pub attributes: Vec<Attribute<'a>>,
 }
 
+#[must_use]
 pub fn document_ids<'a>(tags: &[Tag<'a>]) -> HashSet<&'a str> {
     let mut ids = HashSet::new();
     for tag in tags {
@@ -170,6 +172,7 @@ fn find_closing_tag(source: &str, start: usize, name: &str) -> usize {
     bytes.len()
 }
 
+#[must_use]
 pub fn lex(source: &str) -> Vec<Tag<'_>> {
     let bytes = source.as_bytes();
     let len = bytes.len();

@@ -33,6 +33,7 @@ pub struct CursorScanner;
 
 impl CursorScanner {
     /// Scan cursor context at byte offset in HTML source.
+    #[must_use]
     pub fn scan(source: &str, offset: usize) -> CursorContext {
         let offset = offset.min(source.len());
         let tags = lex(source);

@@ -29,11 +29,13 @@ impl Default for Config {
 
 impl Config {
     /// Create a new configuration by merging JSON overrides over the default configuration.
+    #[must_use]
     pub fn from_json(value: &serde_json::Value) -> Self {
         Self::default().merged(value)
     }
 
     /// Merge JSON overrides over an existing configuration.
+    #[must_use]
     pub fn merged(mut self, value: &serde_json::Value) -> Self {
         if value.is_null() {
             return self;
@@ -57,6 +59,7 @@ impl Config {
     }
 
     /// Determine the effective severity for a diagnostic code, returning `None` if disabled (`off`).
+    #[must_use]
     pub fn severity(&self, code: &str, builtin: DiagnosticSeverity) -> Option<DiagnosticSeverity> {
         match self.severity.get(code) {
             Some(SeverityLevel::Off) => None,
