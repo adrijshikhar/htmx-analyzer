@@ -6,8 +6,10 @@ rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-publish = false
 description = "Declarative schema definitions and documentation for HTMX 2.0"
+homepage = "https://github.com/adrijshikhar/htmx-analyzer"
+keywords = ["htmx", "htmx2", "schema", "html"]
+categories = ["development-tools"]
 
 [dependencies]
 serde = { workspace = true }

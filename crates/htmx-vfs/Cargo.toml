@@ -6,8 +6,10 @@ rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-publish = false
-description = "Virtual File System and rope-based text document management"
+description = "Virtual File System and rope-based text document management for HTMX"
+homepage = "https://github.com/adrijshikhar/htmx-analyzer"
+keywords = ["vfs", "ropey", "lsp", "htmx"]
+categories = ["development-tools"]
 
 [dependencies]
 ropey = { workspace = true }
