@@ -1,11 +1,45 @@
-use htmx_service::HtmxLanguageService;
+use htmx_service::{HtmxLanguageService, WorkspaceIdIndex};
 use htmx_vfs::DocumentStore;
 use lsp_types::{
     CodeActionParams, CodeActionResponse, CompletionParams, CompletionResponse,
-    DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams, Hover,
-    HoverParams,
+    DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
+    GotoDefinitionParams, GotoDefinitionResponse, Hover, HoverParams, Location, ReferenceParams,
 };
 use tracing::{debug, info};
+
+pub fn handle_definition(
+    service: &HtmxLanguageService,
+    doc_store: &DocumentStore,
+    index: &WorkspaceIdIndex,
+    link_support: bool,
+    params: GotoDefinitionParams,
+) -> Option<GotoDefinitionResponse> {
+    let uri = params.text_document_position_params.text_document.uri;
+    let pos = params.text_document_position_params.position;
+
+    debug!("Handling definition request for {:?} at {:?}", uri, pos);
+
+    let doc = doc_store.get(&uri)?;
+    service.goto_definition(&uri, pos, doc, index, link_support)
+}
+
+pub fn handle_references(
+    service: &HtmxLanguageService,
+    doc_store: &DocumentStore,
+    index: &WorkspaceIdIndex,
+    params: ReferenceParams,
+) -> Option<Vec<Location>> {
+    let uri = params.text_document_position.text_document.uri;
+    let pos = params.text_document_position.position;
+    let include_declaration = params.context.include_declaration;
+
+    debug!("Handling references request for {:?} at {:?}", uri, pos);
+
+    let doc = doc_store.get(&uri)?;
+    let open_docs: Vec<_> = doc_store.documents().collect();
+    let refs = service.find_references(&uri, pos, doc, &open_docs, index, include_declaration);
+    Some(refs)
+}
 
 pub fn handle_completion(
     service: &HtmxLanguageService,

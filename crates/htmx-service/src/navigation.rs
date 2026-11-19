@@ -101,6 +101,24 @@ impl WorkspaceIdIndex {
     pub fn contains_id(&self, id: &str) -> bool {
         self.defs.get(id).is_some_and(|v| !v.is_empty())
     }
+
+    /// Merge another workspace index into this one.
+    pub fn merge(&mut self, other: WorkspaceIdIndex) {
+        for (uri, ids) in other.file_to_ids {
+            self.file_to_ids.insert(uri, ids);
+        }
+        for (id, locations) in other.defs {
+            let entry = self.defs.entry(id).or_default();
+            for loc in locations {
+                if !entry
+                    .iter()
+                    .any(|existing| existing.uri == loc.uri && existing.range == loc.range)
+                {
+                    entry.push(loc);
+                }
+            }
+        }
+    }
 }
 
 /// Navigate from an ID reference to its definition `<tag id="...">`.
