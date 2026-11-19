@@ -1,7 +1,7 @@
 {
-  "crates/htmx-schema": "0.2.0",
-  "crates/htmx-parser": "0.2.0",
-  "crates/htmx-vfs": "0.2.0",
-  "crates/htmx-service": "0.2.0",
-  "crates/htmx-lsp": "0.2.0"
+  "crates/htmx-schema": "0.3.0",
+  "crates/htmx-parser": "0.3.0",
+  "crates/htmx-vfs": "0.3.0",
+  "crates/htmx-service": "0.3.0",
+  "crates/htmx-lsp": "0.3.0"
 }
