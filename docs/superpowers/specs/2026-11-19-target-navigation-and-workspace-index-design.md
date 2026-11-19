@@ -49,27 +49,40 @@ The implementation respects strict boundaries across the workspace crates:
 ```
 
 ### 2.1. `crates/htmx-parser`
-* **Zero-copy tokenization:** Extracts exact byte ranges for:
-  * ID definitions: `IdDefinition { id: &'a str, value_range: Range<usize>, tag_range: Range<usize> }`.
-  * Target ID references: Identifies attributes (`hx-target`, `hx-indicator`, `hx-swap-oob`, `hx-sync`), strips leading `#`, handles prefix flags (e.g. `true:`), and returns the target ID string with its byte range.
+* **Zero-copy tokenization (`m01-ownership`, `m04-zero-cost`):** Extracts exact byte ranges with zero heap allocations during scanning:
+  * ID definitions: `IdDefinition<'a> { pub id: &'a str, pub value_range: Range<usize>, pub tag_range: Range<usize> }`.
+  * Target ID references (`m05-type-driven`): `IdReference<'a> { pub id: &'a str, pub span: Range<usize>, pub origin_span: Range<usize> }`. Identifies attributes (`hx-target`, `hx-indicator`, `hx-swap-oob`, `hx-sync`), strips leading `#`, handles prefix flags (e.g. `true:`), and provides the target ID slice with its source ranges.
 * **Dynamic skipping:** Reuses `AttrValue::is_dynamic()` to skip template interpolations (e.g. `id="item-{{ .ID }}"`).
+* **Infallible parsing (`m06-error-handling`):** Parser functions return zero-copy iterators or slices, never panic on unclosed tags or malformed quotes, and adhere to `#![forbid(unsafe_code)]`.
 
 ### 2.2. `crates/htmx-service`
-* **`WorkspaceIdIndex`:** Manages an in-memory symbol table:
+* **`WorkspaceIdIndex` (`m10-performance`, `m02-resource`):** Manages an in-memory symbol table optimized for low memory footprint and zero heap indirection for the 99.9% common case:
   ```rust
+  use smallvec::SmallVec;
+
+  #[derive(Debug, Clone, PartialEq, Eq)]
   pub struct IdLocation {
       pub uri: lsp_types::Url,
       pub range: lsp_types::Range,        // Exact span of "my-id"
       pub tag_range: lsp_types::Range,    // Span of <div id="my-id">
   }
 
+  #[derive(Default, Debug, Clone)]
   pub struct WorkspaceIdIndex {
-      defs: HashMap<String, Vec<IdLocation>>,
+      /// HTML IDs are virtually always unique across templates; SmallVec<[IdLocation; 1]>
+      /// inlines the single location directly in the map entry with zero heap allocation.
+      defs: HashMap<String, SmallVec<[IdLocation; 1]>>,
       file_to_ids: HashMap<lsp_types::Url, Vec<String>>,
   }
   ```
-* **`navigation.rs`:**
-  * `goto_definition(uri, position, doc, index) -> Option<lsp_types::GotoDefinitionResponse>`
+* **Concurrency Model (`m07-concurrency`, `m03-mutability`):**
+  * Wrap `WorkspaceIdIndex` in `parking_lot::RwLock<WorkspaceIdIndex>` inside `DocumentStore`.
+  * Read operations (`goto_definition`, `find_references`, `diagnostics`) acquire read locks (`index.read()`) concurrently with zero blocking between requests.
+  * Write operations (startup crawler, incremental `didChange`) acquire write locks briefly. The crawler aggregates all files in a local staging index on a worker thread and merges in a single lock acquisition to prevent reader starvation.
+* **`navigation.rs` (`m05-type-driven`):**
+  * `goto_definition(uri, position, doc, index, link_support) -> Option<lsp_types::GotoDefinitionResponse>`:
+    * When client supports `linkSupport`, returns `GotoDefinitionResponse::Link(Vec<LocationLink>)` with `origin_selection_range` highlighting the exact `#target-id` token, and `target_range` / `target_selection_range` pointing to the element and ID.
+    * Fallback returns `GotoDefinitionResponse::Scalar(Location)` or `GotoDefinitionResponse::Array(Vec<Location>)`.
   * `find_references(uri, position, doc, index, include_declaration) -> Vec<lsp_types::Location>`
 * **Diagnostics integration:** Enhances `HTMX004` (unknown target ID) to check `WorkspaceIdIndex` before flagging, eliminating false warnings in template partials.
 
@@ -125,12 +138,23 @@ The implementation respects strict boundaries across the workspace crates:
 
 ---
 
-## 5. Micro-benchmarking Suite
+## 5. Micro-benchmarking Suite (`golang-benchmark`, `m10-performance`)
 
-Added to `crates/htmx-service/benches/navigation.rs` using Criterion:
-* `bench_goto_definition_10k`: Resolution time in a 10,000-line document with 500 ID definitions. Target: `< 50 µs`.
-* `bench_find_references_10k`: Reference search across 10,000 lines. Target: `< 200 µs`.
-* `bench_workspace_index_build`: Time to crawl and index 100 simulated template files. Target: `< 15 ms`.
+Benchmarks are added to `crates/htmx-service/benches/navigation.rs` using Criterion, adopting the statistical rigor and table-driven methodology from Go & Rust performance standards:
+* **Table-driven fixture sizing:**
+  * S (Small): 100 lines, 10 IDs.
+  * M (Medium): 1,000 lines, 100 IDs.
+  * L (Large): 10,000 lines, 1,000 IDs.
+* **Separation of setup vs measurement:**
+  * Document creation and indexing are excluded from hot-loop lookup measurement.
+  * Inputs and return values are shielded with `criterion::black_box` to prevent dead-code elimination.
+* **Throughput and Custom Metrics:**
+  * Benchmark groups declare `group.throughput(Throughput::Bytes(...))` and `group.throughput(Throughput::Elements(lines))` to measure scan and resolution velocity.
+* **Positive vs Negative Workloads:**
+  * `bench_goto_definition/hit`: Resolution time for existing IDs. SLA: `< 20 µs` (10k lines).
+  * `bench_goto_definition/miss`: Resolution time for non-existent IDs (verifying worst-case diagnostic check). SLA: `< 25 µs`.
+  * `bench_find_references`: Reference search across multi-thousand-line documents. SLA: `< 150 µs`.
+  * `bench_workspace_index_build`: Time to crawl and index 100 simulated template files. SLA: `< 15 ms`.
 
 ---
 
