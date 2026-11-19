@@ -899,6 +899,12 @@ def main():
         action="store_true",
         help="Output raw benchmark JSON instead of Markdown",
     )
+    parser.add_argument(
+        "-q",
+        "--quiet",
+        action="store_true",
+        help="Run benchmarks quietly without printing Markdown report",
+    )
     args = parser.parse_args()
 
     binary_path = os.path.abspath(args.binary)
@@ -919,7 +925,9 @@ def main():
     # 4. Single-document scale benchmark
     scale_results = bench_single_doc_scale(binary_path, [1000, 10000, 50000])
 
-    if args.json:
+    if args.quiet:
+        pass
+    elif args.json:
         data = {
             "cold_start": cold_results,
             "workspace_ingestion": ingestion_results,
