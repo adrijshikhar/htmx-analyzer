@@ -1,0 +1,15 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "last-release-sha": "bbf614207d86e5217801da9cd0804ce246368a90",
+  "plugins": [
+    "cargo-workspace"
+  ],
+  "packages": {
+    ".": {
+      "release-type": "rust",
+      "package-name": "htmx-analyzer",
+      "include-component-in-tag": false,
+      "bump-minor-pre-major": false
+    }
+  }
+}

@@ -1,0 +1,98 @@
+name: Publish to crates.io
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Optional tag to release if triggering manually (e.g. v0.2.0)'
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-crates-io-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish-crates:
+    name: Publish Crates to crates.io
+    runs-on: ubuntu-latest
+    if: github.repository == 'adrijshikhar/htmx-analyzer'
+    steps:
+      - name: Determine Target Git Ref
+        id: target
+        run: |
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            echo "ref=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.target.outputs.ref }}
+          fetch-depth: 0
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # stable
+        with:
+          toolchain: stable
+
+      - name: Verify workspace tests
+        run: cargo test --workspace --all-targets --locked
+
+      - name: Publish all crates in dependency order
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN || secrets.CRATES_IO_TOKEN }}
+        run: |
+          publish_crate() {
+            local package="$1"
+            local max_attempts=12
+            local attempt=1
+            local delay=15
+
+            local version
+            version=$(cargo metadata --no-deps --format-version 1 | python3 -c "import json,sys; p=json.load(sys.stdin)['packages']; print(next(x['version'] for x in p if x['name'] == '$package'))")
+
+            echo "============================================================"
+            echo "==> Publishing $package v$version..."
+            echo "============================================================"
+
+            while [ $attempt -le $max_attempts ]; do
+              set +e
+              output=$(cargo publish -p "$package" 2>&1)
+              exit_code=$?
+              set -e
+
+              echo "$output"
+
+              if [ $exit_code -eq 0 ]; then
+                echo "==> Successfully published $package v$version!"
+                return 0
+              fi
+
+              if echo "$output" | grep -iq "already uploaded"; then
+                echo "==> $package v$version is already uploaded on crates.io. Skipping."
+                return 0
+              fi
+
+              echo "Publish of $package failed (attempt $attempt/$max_attempts). Waiting ${delay}s for crates.io index update..."
+              sleep $delay
+              attempt=$((attempt + 1))
+            done
+
+            echo "Error: Failed to publish $package after $max_attempts attempts." >&2
+            return 1
+          }
+
+          publish_crate htmx-schema
+          publish_crate htmx-vfs
+          publish_crate htmx-parser
+          publish_crate htmx-service
+          publish_crate htmx-analyzer
