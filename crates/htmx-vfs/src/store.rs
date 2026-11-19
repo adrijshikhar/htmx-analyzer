@@ -61,4 +61,14 @@ impl DocumentStore {
     pub fn uris(&self) -> impl Iterator<Item = &Uri> {
         self.documents.keys()
     }
+
+    /// Iterate over open documents.
+    pub fn documents(&self) -> impl Iterator<Item = &Document> {
+        self.documents.values()
+    }
+
+    /// Iterate over open document URI and document pairs.
+    pub fn iter(&self) -> impl Iterator<Item = (&Uri, &Document)> {
+        self.documents.iter()
+    }
 }

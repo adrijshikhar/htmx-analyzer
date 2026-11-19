@@ -1,5 +1,5 @@
 use crate::handler;
-use htmx_service::{Config, HtmxLanguageService};
+use htmx_service::{Config, HtmxLanguageService, WorkspaceIdIndex};
 use htmx_vfs::DocumentStore;
 use lsp_server::{Connection, Message, Notification, Request, Response};
 use lsp_types::{
@@ -7,12 +7,16 @@ use lsp_types::{
         DidChangeConfiguration, DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument,
         LogMessage, Notification as _, PublishDiagnostics,
     },
-    request::{CodeActionRequest, Completion, HoverRequest, Request as _},
-    CodeActionOptions, CodeActionProviderCapability, CompletionOptions, HoverProviderCapability,
-    LogMessageParams, MessageType, PublishDiagnosticsParams, ServerCapabilities,
-    TextDocumentSyncCapability, TextDocumentSyncKind, Uri,
+    request::{
+        CodeActionRequest, Completion, GotoDefinition, HoverRequest, References, Request as _,
+    },
+    CodeActionOptions, CodeActionProviderCapability, CompletionOptions,
+    HoverProviderCapability, LogMessageParams, MessageType, OneOf, PublishDiagnosticsParams,
+    ServerCapabilities, TextDocumentSyncCapability, TextDocumentSyncKind, Uri,
 };
 use std::error::Error;
+use std::str::FromStr;
+use std::sync::Arc;
 use tracing::{debug, error, info, trace, warn};
 
 /// LSP exit kind returned when the server terminates.
@@ -26,6 +30,8 @@ pub struct Server {
     connection: Connection,
     service: HtmxLanguageService,
     doc_store: DocumentStore,
+    workspace_index: Arc<parking_lot::RwLock<WorkspaceIdIndex>>,
+    link_support: bool,
     #[cfg(test)]
     pub panic_on_next_did_change: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
@@ -36,12 +42,88 @@ fn mark_dirty(dirty: &mut Vec<Uri>, uri: Uri) {
     }
 }
 
+fn is_template_file(path: &std::path::Path) -> bool {
+    let Some(ext) = path.extension().and_then(|e| e.to_str()) else {
+        return false;
+    };
+    matches!(
+        ext.to_ascii_lowercase().as_str(),
+        "html"
+            | "htm"
+            | "jinja"
+            | "jinja2"
+            | "j2"
+            | "templ"
+            | "blade"
+            | "php"
+            | "erb"
+            | "hbs"
+            | "liquid"
+            | "twig"
+    )
+}
+
+fn is_ignored_dir(name: &str) -> bool {
+    matches!(
+        name,
+        ".git" | "node_modules" | "target" | "dist" | "build" | "vendor" | ".idea" | ".vscode"
+    )
+}
+
+fn crawl_workspace(
+    roots: &[std::path::PathBuf],
+    index: &Arc<parking_lot::RwLock<WorkspaceIdIndex>>,
+) {
+    let mut staging = WorkspaceIdIndex::new();
+    let mut count = 0usize;
+
+    for root in roots {
+        for entry in walkdir::WalkDir::new(root)
+            .into_iter()
+            .filter_entry(|e| {
+                if e.file_type().is_dir() {
+                    !is_ignored_dir(e.file_name().to_str().unwrap_or(""))
+                } else {
+                    true
+                }
+            })
+            .filter_map(Result::ok)
+        {
+            if count >= 10_000 {
+                warn!("Workspace crawler reached 10,000 files limit");
+                break;
+            }
+            if !entry.file_type().is_file() || !is_template_file(entry.path()) {
+                continue;
+            }
+            let Ok(meta) = entry.metadata() else { continue };
+            if meta.len() > htmx_parser::MAX_FILE_SIZE as u64 {
+                continue;
+            }
+            let Ok(content) = std::fs::read_to_string(entry.path()) else {
+                continue;
+            };
+            let uri_str = format!("file://{}", entry.path().to_string_lossy());
+            let Ok(uri) = Uri::from_str(&uri_str) else {
+                continue;
+            };
+            staging.update_file(&uri, &content);
+            count += 1;
+        }
+    }
+
+    info!("Workspace crawler indexed {} template files", count);
+    index.write().merge(staging);
+}
+
 impl Server {
     pub fn new(connection: Connection) -> Self {
         Self {
             connection,
             service: HtmxLanguageService::new(),
             doc_store: DocumentStore::new(),
+            workspace_index: Arc::new(parking_lot::RwLock::new(WorkspaceIdIndex::new())),
+            link_support: false,
             #[cfg(test)]
             panic_on_next_did_change: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(
                 false,
@@ -73,6 +155,8 @@ impl Server {
                 work_done_progress_options: Default::default(),
                 resolve_provider: Some(false),
             })),
+            definition_provider: Some(OneOf::Left(true)),
+            references_provider: Some(OneOf::Left(true)),
             ..Default::default()
         };
 
@@ -84,6 +168,37 @@ impl Server {
             .unwrap_or(serde_json::Value::Null);
         let config = Config::from_json(&init_options);
         self.service.set_config(config);
+
+        let link_support = init_params_val
+            .get("capabilities")
+            .and_then(|c| c.get("textDocument"))
+            .and_then(|td| td.get("definition"))
+            .and_then(|d| d.get("linkSupport"))
+            .and_then(|ls| ls.as_bool())
+            .unwrap_or(false);
+        self.link_support = link_support;
+
+        let mut root_paths = Vec::new();
+        if let Some(folders) = init_params_val.get("workspaceFolders").and_then(|f| f.as_array()) {
+            for folder in folders {
+                if let Some(uri_str) = folder.get("uri").and_then(|u| u.as_str()) {
+                    let path_str = uri_str.trim_start_matches("file://");
+                    root_paths.push(std::path::PathBuf::from(path_str));
+                }
+            }
+        } else if let Some(root_uri_str) = init_params_val.get("rootUri").and_then(|u| u.as_str()) {
+            let path_str = root_uri_str.trim_start_matches("file://");
+            root_paths.push(std::path::PathBuf::from(path_str));
+        } else if let Some(root_path_str) = init_params_val.get("rootPath").and_then(|u| u.as_str()) {
+            root_paths.push(std::path::PathBuf::from(root_path_str));
+        }
+
+        if !root_paths.is_empty() {
+            let index_clone = self.workspace_index.clone();
+            std::thread::spawn(move || {
+                crawl_workspace(&root_paths, &index_clone);
+            });
+        }
 
         info!("htmx-analyzer initialized successfully. Listening on stdio.");
 
@@ -168,6 +283,7 @@ impl Server {
                                         }
                                     };
                                 let uri = params.text_document.uri.clone();
+                                let text = params.text_document.text.clone();
                                 let res =
                                     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                                         handler::handle_did_open(&mut self.doc_store, params);
@@ -176,6 +292,8 @@ impl Server {
                                     error!("Panic in didOpen for {:?}", uri);
                                     continue;
                                 }
+
+                                self.workspace_index.write().update_file(&uri, &text);
 
                                 if let Some(doc) = self.doc_store.get(&uri) {
                                     let len = doc.text().len();
@@ -224,6 +342,7 @@ impl Server {
                                 if res.is_err() {
                                     error!("Panic in didChange for {:?}", uri);
                                     self.doc_store.close(&uri);
+                                    self.workspace_index.write().remove_file(&uri);
                                     dirty.retain(|u| u != &uri);
                                     oversized_notified.remove(uri.as_str());
                                     self.publish_diagnostics(PublishDiagnosticsParams {
@@ -235,7 +354,9 @@ impl Server {
                                 }
 
                                 if let Some(doc) = self.doc_store.get(&uri) {
-                                    let len = doc.text().len();
+                                    let text = doc.text();
+                                    self.workspace_index.write().update_file(&uri, &text);
+                                    let len = text.len();
                                     if len > htmx_parser::MAX_FILE_SIZE {
                                         if oversized_notified.insert(uri.to_string()) {
                                             let msg = format!(
@@ -265,6 +386,17 @@ impl Server {
                                     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                                         handler::handle_did_close(&mut self.doc_store, params);
                                     }));
+                                let file_path =
+                                    std::path::PathBuf::from(uri.as_str().trim_start_matches("file://"));
+                                if file_path.exists() {
+                                    if let Ok(content) = std::fs::read_to_string(&file_path) {
+                                        self.workspace_index.write().update_file(&uri, &content);
+                                    } else {
+                                        self.workspace_index.write().remove_file(&uri);
+                                    }
+                                } else {
+                                    self.workspace_index.write().remove_file(&uri);
+                                }
                                 dirty.retain(|u| u != &uri);
                                 oversized_notified.remove(uri.as_str());
                                 self.publish_diagnostics(PublishDiagnosticsParams {
@@ -319,9 +451,10 @@ impl Server {
                         let diagnostics = if len > htmx_parser::MAX_FILE_SIZE {
                             Vec::new()
                         } else {
+                            let index_guard = self.workspace_index.read();
                             let res =
                                 std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                                    self.service.validate(doc)
+                                    self.service.validate_with_index(doc, Some(&*index_guard))
                                 }));
                             match res {
                                 Ok(diags) => diags,
@@ -407,6 +540,53 @@ impl Server {
                     }
                 };
                 let resp = handler::handle_code_action(&self.service, &self.doc_store, params);
+                let result = serde_json::to_value(resp).unwrap_or(serde_json::Value::Null);
+                self.send_response(Response::new_ok(id, result));
+            }
+            GotoDefinition::METHOD => {
+                let params = match serde_json::from_value(req.params) {
+                    Ok(p) => p,
+                    Err(err) => {
+                        error!("Failed to parse goto definition params: {:?}", err);
+                        self.send_response(Response::new_err(
+                            id,
+                            lsp_server::ErrorCode::InvalidParams as i32,
+                            format!("Invalid goto definition params: {}", err),
+                        ));
+                        return;
+                    }
+                };
+                let index_guard = self.workspace_index.read();
+                let resp = handler::handle_definition(
+                    &self.service,
+                    &self.doc_store,
+                    &index_guard,
+                    self.link_support,
+                    params,
+                );
+                let result = serde_json::to_value(resp).unwrap_or(serde_json::Value::Null);
+                self.send_response(Response::new_ok(id, result));
+            }
+            References::METHOD => {
+                let params = match serde_json::from_value(req.params) {
+                    Ok(p) => p,
+                    Err(err) => {
+                        error!("Failed to parse references params: {:?}", err);
+                        self.send_response(Response::new_err(
+                            id,
+                            lsp_server::ErrorCode::InvalidParams as i32,
+                            format!("Invalid references params: {}", err),
+                        ));
+                        return;
+                    }
+                };
+                let index_guard = self.workspace_index.read();
+                let resp = handler::handle_references(
+                    &self.service,
+                    &self.doc_store,
+                    &index_guard,
+                    params,
+                );
                 let result = serde_json::to_value(resp).unwrap_or(serde_json::Value::Null);
                 self.send_response(Response::new_ok(id, result));
             }
