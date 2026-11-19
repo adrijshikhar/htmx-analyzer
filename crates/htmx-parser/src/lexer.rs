@@ -45,21 +45,153 @@ pub struct Tag<'a> {
     pub attributes: Vec<Attribute<'a>>,
 }
 
+/// An ID definition declared via `<tag id="...">`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IdDefinition<'a> {
+    pub id: &'a str,
+    pub value_range: Range<usize>,
+    pub tag_range: Range<usize>,
+}
+
+/// An ID reference point, either from an element declaration `id="my-id"`
+/// or an HTMX attribute targeting an ID (e.g. `hx-target="#my-id"`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IdReference<'a> {
+    pub id: &'a str,
+    pub span: Range<usize>,         // exact byte range of "my-id"
+    pub origin_span: Range<usize>,  // byte range of "#my-id" or "my-id"
+}
+
+/// Check if attribute name can reference or declare an ID.
 #[must_use]
-pub fn document_ids<'a>(tags: &[Tag<'a>]) -> HashSet<&'a str> {
-    let mut ids = HashSet::new();
+pub fn is_id_referencing_attribute(attr_name: &str) -> bool {
+    let lower = attr_name.to_ascii_lowercase();
+    matches!(
+        lower.as_str(),
+        "id"
+            | "hx-target"
+            | "data-hx-target"
+            | "hx-indicator"
+            | "data-hx-indicator"
+            | "hx-swap-oob"
+            | "data-hx-swap-oob"
+            | "hx-sync"
+            | "data-hx-sync"
+            | "hx-select"
+            | "data-hx-select"
+            | "hx-select-oob"
+            | "data-hx-select-oob"
+    )
+}
+
+/// Find all ID definitions (`id="..."`) in the parsed tags.
+#[must_use]
+pub fn find_id_definitions<'a>(tags: &[Tag<'a>]) -> Vec<IdDefinition<'a>> {
+    let mut defs = Vec::new();
     for tag in tags {
         for attr in &tag.attributes {
             if attr.name.eq_ignore_ascii_case("id") {
                 if let Some(val) = &attr.value {
                     if !val.text.is_empty() && !val.is_dynamic() {
-                        ids.insert(val.text);
+                        defs.push(IdDefinition {
+                            id: val.text,
+                            value_range: val.range.clone(),
+                            tag_range: tag.start..tag.end,
+                        });
                     }
                 }
             }
         }
     }
-    ids
+    defs
+}
+
+/// Collect all ID references from tags across `id` declarations and HTMX attributes.
+#[must_use]
+pub fn find_id_references<'a>(tags: &[Tag<'a>]) -> Vec<IdReference<'a>> {
+    let mut refs = Vec::new();
+    for tag in tags {
+        collect_tag_id_references(tag, &mut refs);
+    }
+    refs
+}
+
+fn collect_tag_id_references<'a>(tag: &Tag<'a>, refs: &mut Vec<IdReference<'a>>) {
+    for attr in &tag.attributes {
+        if !is_id_referencing_attribute(attr.name) {
+            continue;
+        }
+        let Some(val) = &attr.value else { continue };
+        if val.text.is_empty() || val.is_dynamic() {
+            continue;
+        }
+
+        if attr.name.eq_ignore_ascii_case("id") {
+            refs.push(IdReference {
+                id: val.text,
+                span: val.range.clone(),
+                origin_span: val.range.clone(),
+            });
+            continue;
+        }
+
+        // Scan for #<id_chars> in target attributes
+        let bytes = val.text.as_bytes();
+        let mut i = 0;
+        while i < bytes.len() {
+            if bytes[i] == b'#' {
+                let hash_idx = i;
+                let id_start = hash_idx + 1;
+                let mut id_end = id_start;
+                while id_end < bytes.len() {
+                    let b = bytes[id_end];
+                    if b.is_ascii_alphanumeric() || b == b'-' || b == b'_' {
+                        id_end += 1;
+                    } else {
+                        break;
+                    }
+                }
+                if id_end > id_start {
+                    let id = &val.text[id_start..id_end];
+                    let origin_start = val.range.start + hash_idx;
+                    let origin_end = val.range.start + id_end;
+                    let span_start = val.range.start + id_start;
+                    let span_end = origin_end;
+                    refs.push(IdReference {
+                        id,
+                        span: span_start..span_end,
+                        origin_span: origin_start..origin_end,
+                    });
+                }
+                i = id_end;
+            } else {
+                i += 1;
+            }
+        }
+    }
+}
+
+/// Find the ID reference under the cursor at `offset`, if any.
+#[must_use]
+pub fn find_id_reference_at<'a>(tags: &[Tag<'a>], offset: usize) -> Option<IdReference<'a>> {
+    for tag in tags {
+        if offset < tag.start || offset > tag.end {
+            continue;
+        }
+        let mut refs = Vec::new();
+        collect_tag_id_references(tag, &mut refs);
+        for r in refs {
+            if offset >= r.origin_span.start && offset <= r.origin_span.end {
+                return Some(r);
+            }
+        }
+    }
+    None
+}
+
+#[must_use]
+pub fn document_ids<'a>(tags: &[Tag<'a>]) -> HashSet<&'a str> {
+    find_id_definitions(tags).into_iter().map(|d| d.id).collect()
 }
 
 fn skip_balanced_braces(source: &str, start: usize) -> usize {
