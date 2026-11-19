@@ -60,6 +60,7 @@ pub struct IdReference<'a> {
     pub id: &'a str,
     pub span: Range<usize>,         // exact byte range of "my-id"
     pub origin_span: Range<usize>,  // byte range of "#my-id" or "my-id"
+    pub is_declaration: bool,
 }
 
 /// Check if attribute name can reference or declare an ID.
@@ -131,6 +132,7 @@ fn collect_tag_id_references<'a>(tag: &Tag<'a>, refs: &mut Vec<IdReference<'a>>)
                 id: val.text,
                 span: val.range.clone(),
                 origin_span: val.range.clone(),
+                is_declaration: true,
             });
             continue;
         }
@@ -161,6 +163,7 @@ fn collect_tag_id_references<'a>(tag: &Tag<'a>, refs: &mut Vec<IdReference<'a>>)
                         id,
                         span: span_start..span_end,
                         origin_span: origin_start..origin_end,
+                        is_declaration: false,
                     });
                 }
                 i = id_end;
