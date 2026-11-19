@@ -3,6 +3,7 @@
 A fast, production-grade HTMX 2.0 language server and static analyzer written in Rust.
 
 [![CI](https://github.com/adrijshikhar/htmx-analyzer/actions/workflows/ci.yml/badge.svg)](https://github.com/adrijshikhar/htmx-analyzer/actions/workflows/ci.yml)
+[![crates.io](https://img.shields.io/crates/v/htmx-analyzer.svg)](https://crates.io/crates/htmx-analyzer)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 `htmx-analyzer` provides IDE-grade language features for [HTMX](https://htmx.org/) (including HTMX 2.0):

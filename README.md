@@ -3,6 +3,7 @@
 A fast, production-grade HTMX 2.0 language server and static analyzer written in Rust.
 
 [![CI](https://github.com/adrijshikhar/htmx-analyzer/actions/workflows/ci.yml/badge.svg)](https://github.com/adrijshikhar/htmx-analyzer/actions/workflows/ci.yml)
+[![crates.io](https://img.shields.io/crates/v/htmx-analyzer.svg)](https://crates.io/crates/htmx-analyzer)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 `htmx-analyzer` provides IDE-grade language features for [HTMX](https://htmx.org/) (including HTMX 2.0):
@@ -46,8 +47,13 @@ Supported platforms:
 - Windows x86_64: `htmx-analyzer-windows-x64.exe`
 - Windows AArch64: `htmx-analyzer-windows-arm64.exe`
 
-### From Source
+### From crates.io (Cargo)
 Install directly using Cargo:
+```bash
+cargo install htmx-analyzer
+```
+
+### From Git Source
 ```bash
 cargo install --git https://github.com/adrijshikhar/htmx-analyzer htmx-analyzer
 ```
