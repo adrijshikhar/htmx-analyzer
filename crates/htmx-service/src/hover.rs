@@ -125,9 +125,9 @@ impl HoverProvider {
 
         let start = before
             .rfind(|c: char| c.is_whitespace() || c == ',')
-            .map(|i| {
-                let ch = before[i..].chars().next().unwrap();
-                i + ch.len_utf8()
+            .and_then(|i| {
+                let ch = before[i..].chars().next()?;
+                Some(i + ch.len_utf8())
             })
             .unwrap_or(0);
         let end = after
