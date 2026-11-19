@@ -97,22 +97,18 @@ fn bench_navigation(c: &mut Criterion) {
         );
 
         // 3. Find References
-        group.bench_with_input(
-            BenchmarkId::new("find_references", size),
-            &size,
-            |b, _| {
-                b.iter(|| {
-                    black_box(find_references(
-                        black_box(&uri),
-                        black_box(hit_pos),
-                        black_box(&doc),
-                        black_box(&[&doc]),
-                        black_box(&index),
-                        black_box(true),
-                    ))
-                })
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("find_references", size), &size, |b, _| {
+            b.iter(|| {
+                black_box(find_references(
+                    black_box(&uri),
+                    black_box(hit_pos),
+                    black_box(&doc),
+                    black_box(&[&doc]),
+                    black_box(&index),
+                    black_box(true),
+                ))
+            })
+        });
     }
 
     group.finish();

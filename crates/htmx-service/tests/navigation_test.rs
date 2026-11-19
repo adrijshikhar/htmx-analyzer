@@ -13,7 +13,13 @@ fn test_goto_definition_same_file() {
 
     // Cursor on "results" inside hx-target="#results" (line 1)
     let button_line = 1;
-    let col = html.lines().nth(button_line).unwrap().find("results").unwrap() as u32 + 2;
+    let col = html
+        .lines()
+        .nth(button_line)
+        .unwrap()
+        .find("results")
+        .unwrap() as u32
+        + 2;
     let pos = Position::new(button_line as u32, col);
 
     let res = goto_definition(&uri, pos, &doc, &index, false).expect("definition found");
@@ -63,7 +69,13 @@ fn test_goto_definition_location_link_support() {
     index.update_file(&uri, html);
 
     let button_line = 1;
-    let col = html.lines().nth(button_line).unwrap().find("results").unwrap() as u32 + 2;
+    let col = html
+        .lines()
+        .nth(button_line)
+        .unwrap()
+        .find("results")
+        .unwrap() as u32
+        + 2;
     let pos = Position::new(button_line as u32, col);
 
     let res = goto_definition(&uri, pos, &doc, &index, true).expect("definition link found");
@@ -127,12 +139,14 @@ fn test_diagnostics_suppressed_by_workspace_index() {
     // Without workspace index: HTMX004 is emitted because #cart-count is missing in this file
     let diags_without = service.validate(&partial_doc);
     assert!(
-        diags_without
-            .iter()
-            .any(|d| d.code.as_ref().map(|c| match c {
+        diags_without.iter().any(|d| d
+            .code
+            .as_ref()
+            .map(|c| match c {
                 lsp_types::NumberOrString::String(s) => s == "HTMX004",
                 _ => false,
-            }).unwrap_or(false)),
+            })
+            .unwrap_or(false)),
         "Expected HTMX004 without workspace index"
     );
 
@@ -142,11 +156,17 @@ fn test_diagnostics_suppressed_by_workspace_index() {
     index.update_file(&base_uri, r##"<span id="cart-count">0</span>"##);
 
     let diags_with = service.validate_with_index(&partial_doc, Some(&index));
-    let has_htmx004 = diags_with
-        .iter()
-        .any(|d| d.code.as_ref().map(|c| match c {
-            lsp_types::NumberOrString::String(s) => s == "HTMX004",
-            _ => false,
-        }).unwrap_or(false));
-    assert!(!has_htmx004, "HTMX004 should be suppressed when target ID is defined in workspace index");
+    let has_htmx004 = diags_with.iter().any(|d| {
+        d.code
+            .as_ref()
+            .map(|c| match c {
+                lsp_types::NumberOrString::String(s) => s == "HTMX004",
+                _ => false,
+            })
+            .unwrap_or(false)
+    });
+    assert!(
+        !has_htmx004,
+        "HTMX004 should be suppressed when target ID is defined in workspace index"
+    );
 }
