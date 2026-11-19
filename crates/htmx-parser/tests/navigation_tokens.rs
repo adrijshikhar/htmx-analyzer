@@ -14,7 +14,10 @@ fn test_find_id_definitions() {
     );
     assert_eq!(defs[1].id, "second-item");
     assert_eq!(&html[defs[1].value_range.clone()], "second-item");
-    assert_eq!(&html[defs[1].tag_range.clone()], r##"<span id="second-item">"##);
+    assert_eq!(
+        &html[defs[1].tag_range.clone()],
+        r##"<span id="second-item">"##
+    );
 }
 
 #[test]

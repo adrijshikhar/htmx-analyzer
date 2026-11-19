@@ -7,6 +7,9 @@ A fast, production-grade HTMX 2.0 language server and static analyzer written in
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 `htmx-analyzer` provides IDE-grade language features for [HTMX](https://htmx.org/) (including HTMX 2.0):
+- **Target Navigation & Cross-File Jump (`F12` / `gd`)**: Jump directly from target selectors (`hx-target="#id"`, `hx-indicator="#id"`, `hx-swap-oob="true:#id"`, `hx-sync="#id:event"`) to the declaring element `<tag id="id">`. Supports LSP `LocationLink` for high-precision cursor targeting.
+- **Find References (`Shift+F12`)**: Discover all HTMX attributes in the document and workspace referencing any given element `<tag id="id">`.
+- **Cross-Template Workspace Indexing**: Fast in-memory symbol index resolves target IDs across partials and layout templates on startup, eliminating false-positive `HTMX004` diagnostics.
 - **Intelligent Autocompletion**: 34 active core attributes (`hx-*`, `data-hx-*`), swap styles, trigger events, modifiers, CSS selector targets, and extensions (`sse`, `ws`, `preload`, `response-targets`).
 - **Context-Aware Hover Documentation**: Full Markdown documentation, syntax guides, and examples directly from the HTMX specification.
 - **Static Analysis & Diagnostics**: Real-time linting for deprecated HTMX 1.x patterns (`HTMX001`), invalid swap styles and durations (`HTMX002`), malformed trigger syntax and polling intervals (`HTMX003`), and broken target selector IDs (`HTMX004`).

@@ -58,8 +58,8 @@ pub struct IdDefinition<'a> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IdReference<'a> {
     pub id: &'a str,
-    pub span: Range<usize>,         // exact byte range of "my-id"
-    pub origin_span: Range<usize>,  // byte range of "#my-id" or "my-id"
+    pub span: Range<usize>,        // exact byte range of "my-id"
+    pub origin_span: Range<usize>, // byte range of "#my-id" or "my-id"
     pub is_declaration: bool,
 }
 
@@ -69,8 +69,7 @@ pub fn is_id_referencing_attribute(attr_name: &str) -> bool {
     let lower = attr_name.to_ascii_lowercase();
     matches!(
         lower.as_str(),
-        "id"
-            | "hx-target"
+        "id" | "hx-target"
             | "data-hx-target"
             | "hx-indicator"
             | "data-hx-indicator"
@@ -194,7 +193,10 @@ pub fn find_id_reference_at<'a>(tags: &[Tag<'a>], offset: usize) -> Option<IdRef
 
 #[must_use]
 pub fn document_ids<'a>(tags: &[Tag<'a>]) -> HashSet<&'a str> {
-    find_id_definitions(tags).into_iter().map(|d| d.id).collect()
+    find_id_definitions(tags)
+        .into_iter()
+        .map(|d| d.id)
+        .collect()
 }
 
 fn skip_balanced_braces(source: &str, start: usize) -> usize {

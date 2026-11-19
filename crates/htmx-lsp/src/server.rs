@@ -10,9 +10,9 @@ use lsp_types::{
     request::{
         CodeActionRequest, Completion, GotoDefinition, HoverRequest, References, Request as _,
     },
-    CodeActionOptions, CodeActionProviderCapability, CompletionOptions,
-    HoverProviderCapability, LogMessageParams, MessageType, OneOf, PublishDiagnosticsParams,
-    ServerCapabilities, TextDocumentSyncCapability, TextDocumentSyncKind, Uri,
+    CodeActionOptions, CodeActionProviderCapability, CompletionOptions, HoverProviderCapability,
+    LogMessageParams, MessageType, OneOf, PublishDiagnosticsParams, ServerCapabilities,
+    TextDocumentSyncCapability, TextDocumentSyncKind, Uri,
 };
 use std::error::Error;
 use std::str::FromStr;
@@ -179,7 +179,10 @@ impl Server {
         self.link_support = link_support;
 
         let mut root_paths = Vec::new();
-        if let Some(folders) = init_params_val.get("workspaceFolders").and_then(|f| f.as_array()) {
+        if let Some(folders) = init_params_val
+            .get("workspaceFolders")
+            .and_then(|f| f.as_array())
+        {
             for folder in folders {
                 if let Some(uri_str) = folder.get("uri").and_then(|u| u.as_str()) {
                     let path_str = uri_str.trim_start_matches("file://");
@@ -189,7 +192,8 @@ impl Server {
         } else if let Some(root_uri_str) = init_params_val.get("rootUri").and_then(|u| u.as_str()) {
             let path_str = root_uri_str.trim_start_matches("file://");
             root_paths.push(std::path::PathBuf::from(path_str));
-        } else if let Some(root_path_str) = init_params_val.get("rootPath").and_then(|u| u.as_str()) {
+        } else if let Some(root_path_str) = init_params_val.get("rootPath").and_then(|u| u.as_str())
+        {
             root_paths.push(std::path::PathBuf::from(root_path_str));
         }
 
@@ -386,8 +390,9 @@ impl Server {
                                     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                                         handler::handle_did_close(&mut self.doc_store, params);
                                     }));
-                                let file_path =
-                                    std::path::PathBuf::from(uri.as_str().trim_start_matches("file://"));
+                                let file_path = std::path::PathBuf::from(
+                                    uri.as_str().trim_start_matches("file://"),
+                                );
                                 if file_path.exists() {
                                     if let Ok(content) = std::fs::read_to_string(&file_path) {
                                         self.workspace_index.write().update_file(&uri, &content);
