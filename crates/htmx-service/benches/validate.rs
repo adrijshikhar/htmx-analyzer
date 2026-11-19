@@ -1,7 +1,8 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion, Throughput};
+use criterion::{criterion_group, criterion_main, Criterion, Throughput};
 use htmx_service::HtmxLanguageService;
 use htmx_vfs::Document;
 use lsp_types::{Position, Uri};
+use std::hint::black_box;
 use std::str::FromStr;
 
 fn gen_doc(lines: usize) -> String {
