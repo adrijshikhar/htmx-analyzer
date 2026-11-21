@@ -77,8 +77,8 @@ jobs:
                 return 0
               fi
 
-              if echo "$output" | grep -iq "already uploaded"; then
-                echo "==> $package v$version is already uploaded on crates.io. Skipping."
+              if echo "$output" | grep -iqE "already (uploaded|exists)"; then
+                echo "==> $package v$version is already on crates.io. Skipping."
                 return 0
               fi
 
